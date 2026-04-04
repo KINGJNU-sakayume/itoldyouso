@@ -1,4 +1,4 @@
-import type { SpotifyUser, SpotifyArtist, SpotifyTrack, SpotifySearchResult } from '../types';
+import type { SpotifyUser, SpotifyTrack, SpotifySearchResult } from '../types';
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string;
 const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || `${window.location.origin}/callback`;
@@ -109,16 +109,6 @@ export function clearTokens(): void {
   localStorage.removeItem('spotify_auth_state');
 }
 
-export async function apiRequestBatch<T>(endpoint: string, token: string): Promise<T> {
-  const response = await fetch(`https://api.spotify.com/v1${endpoint}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (response.status === 401) throw new Error('UNAUTHORIZED');
-  if (!response.ok) throw new Error(`Spotify API error: ${response.status}`);
-  return response.json();
-}
-
 async function apiRequest<T>(endpoint: string, token: string): Promise<T> {
   const response = await fetch(`https://api.spotify.com/v1${endpoint}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -138,27 +128,6 @@ export async function searchSpotify(query: string, token: string): Promise<Spoti
   return apiRequest<SpotifySearchResult>(`/search?${params}`, token);
 }
 
-export async function getArtist(artistId: string, token: string): Promise<SpotifyArtist> {
-  return apiRequest<SpotifyArtist>(`/artists/${artistId}`, token);
-}
-
 export async function getTrack(trackId: string, token: string): Promise<SpotifyTrack> {
   return apiRequest<SpotifyTrack>(`/tracks/${trackId}`, token);
-}
-
-export function computeVibeIndex(
-  currentPopularity: number,
-  entryPopularity: number,
-  currentFollowers: number,
-  entryFollowers: number
-): number {
-  const popularityGrowth = entryPopularity > 0
-    ? (currentPopularity - entryPopularity) / entryPopularity
-    : currentPopularity / 100;
-
-  const followerGrowth = entryFollowers > 0
-    ? (currentFollowers - entryFollowers) / entryFollowers
-    : 0;
-
-  return Math.round(((popularityGrowth * 0.4) + (followerGrowth * 0.6)) * 100);
 }

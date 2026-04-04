@@ -20,10 +20,10 @@ export interface Claim {
   track_name: string;
   album_cover_url: string;
   genres: string[];
-  entry_popularity: number;
-  entry_followers: number;
-  current_popularity: number;
-  current_followers: number;
+  entry_listeners: number;
+  entry_playcount: number;
+  current_listeners: number;
+  current_playcount: number;
   vibe_index: number;
   insight: string;
   is_validated: boolean;
@@ -46,8 +46,8 @@ export interface ArtistSnapshot {
   id: string;
   claim_id: string;
   spotify_artist_id: string;
-  popularity: number;
-  followers: number;
+  listeners: number;
+  playcount: number;
   vibe_index: number;
   snapshot_date: string;
 }
@@ -83,8 +83,6 @@ export interface SpotifyArtist {
   id: string;
   name: string;
   images: { url: string; width: number; height: number }[];
-  popularity: number;
-  followers: { total: number };
   genres: string[];
   external_urls: { spotify: string };
 }
@@ -120,3 +118,4 @@ export const PIONEER_CHECK = true;
 
 export const MAX_YOUTUBE_VIEWS_FOR_CLAIM = 5_000_000;
 export const MAX_YOUTUBE_LIKES_FOR_CLAIM = 100_000;
+export const MAX_LASTFM_LISTENERS_FOR_CLAIM = 1_000_000;

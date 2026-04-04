@@ -21,13 +21,13 @@ interface ChartPoint {
   views: number | null;
   likes: number | null;
   vibeIndex: number;
-  followers: number;
-  popularity: number;
+  listeners: number;
+  playcount: number;
   isEntry?: boolean;
 }
 
 type YouTubeMetric = 'views' | 'likes' | 'vibeIndex';
-type LegacyMetric = 'followers' | 'popularity';
+type LegacyMetric = 'listeners' | 'playcount';
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -71,7 +71,7 @@ const CustomTooltip = ({
 export default function ClaimChart({ claim }: Props) {
   const [data, setData] = useState<ChartPoint[]>([]);
   const [ytMetric, setYtMetric] = useState<YouTubeMetric>('views');
-  const [legacyMetric, setLegacyMetric] = useState<LegacyMetric>('followers');
+  const [legacyMetric, setLegacyMetric] = useState<LegacyMetric>('listeners');
   const { t } = useTranslation();
 
   const hasYoutube = claim.entry_youtube_view_count != null;
@@ -90,8 +90,8 @@ export default function ClaimChart({ claim }: Props) {
           views: claim.entry_youtube_view_count ?? null,
           likes: claim.entry_youtube_like_count ?? null,
           vibeIndex: 0,
-          followers: claim.entry_followers,
-          popularity: claim.entry_popularity,
+          listeners: claim.entry_listeners,
+          playcount: claim.entry_playcount,
           isEntry: true,
         }]);
         return;
@@ -102,8 +102,8 @@ export default function ClaimChart({ claim }: Props) {
         views: (s as ArtistSnapshot & { youtube_view_count?: number }).youtube_view_count ?? null,
         likes: (s as ArtistSnapshot & { youtube_like_count?: number }).youtube_like_count ?? null,
         vibeIndex: s.vibe_index,
-        followers: s.followers,
-        popularity: s.popularity,
+        listeners: s.listeners,
+        playcount: s.playcount,
         isEntry: i === 0,
       }));
       setData(points);
@@ -141,8 +141,8 @@ export default function ClaimChart({ claim }: Props) {
   };
 
   const legacyLabels: Record<LegacyMetric, string> = {
-    followers: t('claimChart.followers'),
-    popularity: t('claimChart.popularity'),
+    listeners: t('claimChart.listeners'),
+    playcount: t('claimChart.playcount'),
   };
 
   return (
@@ -166,7 +166,7 @@ export default function ClaimChart({ claim }: Props) {
           </>
         ) : (
           <>
-            {(['followers', 'popularity'] as LegacyMetric[]).map(m => (
+            {(['listeners', 'playcount'] as LegacyMetric[]).map(m => (
               <button
                 key={m}
                 onClick={() => setLegacyMetric(m)}
