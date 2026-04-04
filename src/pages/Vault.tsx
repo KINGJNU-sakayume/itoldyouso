@@ -46,8 +46,8 @@ function getViewGrowthPct(current: number | null, entry: number | null): string 
 function VaultClaimRow({ claim, onShare }: { claim: Claim; onShare: (c: Claim) => void }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation();
-  const growth = claim.entry_followers > 0
-    ? ((claim.current_followers - claim.entry_followers) / claim.entry_followers * 100).toFixed(1)
+  const growth = claim.entry_listeners > 0
+    ? ((claim.current_listeners - claim.entry_listeners) / claim.entry_listeners * 100).toFixed(1)
     : '0';
   const isPositive = Number(growth) >= 0;
 
@@ -96,7 +96,7 @@ function VaultClaimRow({ claim, onShare }: { claim: Claim; onShare: (c: Claim) =
             {isPositive ? '+' : ''}{growth}%
           </div>
           <p className="text-[10px] text-[var(--color-text-3)] mt-0.5">
-            {formatFollowers(claim.current_followers)} followers
+            {formatFollowers(claim.current_listeners)} {t('lastfm.listeners')}
           </p>
         </div>
 
@@ -167,12 +167,12 @@ function VaultClaimRow({ claim, onShare }: { claim: Claim; onShare: (c: Claim) =
               ) : (
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="bg-[var(--color-surface-2)] rounded-xl p-3 text-center">
-                    <p className="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] mb-1">{t('genre.entryPop')}</p>
-                    <p className="text-sm font-bold text-[var(--color-text)]">{claim.entry_popularity}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] mb-1">{t('lastfm.entryListeners')}</p>
+                    <p className="text-sm font-bold text-[var(--color-text)]">{formatFollowers(claim.entry_listeners)}</p>
                   </div>
                   <div className="bg-[var(--color-surface-2)] rounded-xl p-3 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] mb-1">{t('vault.current')}</p>
-                    <p className="text-sm font-bold text-[var(--color-text)]">{claim.current_popularity}</p>
+                    <p className="text-sm font-bold text-[var(--color-text)]">{formatFollowers(claim.current_listeners)}</p>
                   </div>
                   <div className="bg-[var(--color-surface-2)] rounded-xl p-3 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] mb-1">{t('vault.vibeIndex')}</p>

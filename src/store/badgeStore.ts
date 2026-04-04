@@ -69,14 +69,14 @@ export const useBadgeStore = create<BadgeState>((set, get) => ({
     const undergroundClaim = claims.find(c =>
       c.entry_youtube_view_count != null
         ? c.entry_youtube_view_count < 100_000
-        : c.entry_popularity < 10
+        : c.entry_listeners < 100_000
     );
     if (undergroundClaim) await award('underground_oxygen', undergroundClaim.id);
 
     const deepDiverClaim = claims.find(c =>
       c.entry_youtube_like_count != null
         ? c.entry_youtube_like_count < 1_000
-        : c.entry_followers < 1_000
+        : c.entry_playcount < 10_000
     );
     if (deepDiverClaim) await award('deep_diver', deepDiverClaim.id);
 

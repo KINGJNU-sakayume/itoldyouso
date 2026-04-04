@@ -112,7 +112,7 @@
     "errorQuotaExceeded": "You've used all your claims for this month.",
     "errorSearchFailed": "Search failed. Please try again.",
     "errorSubmitFailed": "Failed to submit claim. Please try again.",
-    "popularity": "popularity",
+    "selectToSeeStats": "Select to see stats",
     "youtubeSelectLabel": "Select YouTube Video",
     "youtubeSearching": "Searching YouTube...",
     "youtubeSearchFailed": "Could not load YouTube results. You can skip this step.",
@@ -124,8 +124,8 @@
     "back": "Back"
   },
   "claimChart": {
-    "followers": "Followers",
-    "popularity": "Popularity",
+    "listeners": "Listeners",
+    "playcount": "Play Count",
     "entry": "Entry"
   },
   "proofCard": {
@@ -149,7 +149,16 @@
     "syncing": "Hang tight, syncing your profile"
   },
   "genre": {
-    "entryPop": "Entry Pop."
+    "entryPop": "Entry Listeners"
+  },
+  "lastfm": {
+    "listeners": "listeners",
+    "playcount": "total plays",
+    "tooFamous": "Too mainstream (over 1M listeners)",
+    "loading": "Loading Last.fm stats...",
+    "error": "Last.fm data unavailable",
+    "entryListeners": "Listeners at claim time",
+    "currentListeners": "Listeners now"
   },
   "badgeNames": {
     "clairvoyant": "Clairvoyant",

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Music, Loader2, CheckCircle2, Youtube, Eye, ThumbsUp, ChevronRight, ChevronLeft, AlertCircle, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { SpotifyTrack, SpotifyArtist } from '../../types';
-import { searchSpotify, getArtist, apiRequestBatch } from '../../lib/spotify';
+import type { SpotifyTrack } from '../../types';
+import { searchSpotify } from '../../lib/spotify';
+import { getLastFmArtistInfo, parseLastFmCount, getLastFmImageUrl, type LastFmArtist } from '../../lib/lastfm';
 import { searchYouTubeVideos, formatCount, type YouTubeVideo } from '../../lib/youtube';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
-import { CLAIMS_PER_MONTH, MAX_YOUTUBE_VIEWS_FOR_CLAIM, MAX_YOUTUBE_LIKES_FOR_CLAIM } from '../../types';
+import { CLAIMS_PER_MONTH, MAX_YOUTUBE_VIEWS_FOR_CLAIM, MAX_YOUTUBE_LIKES_FOR_CLAIM, MAX_LASTFM_LISTENERS_FOR_CLAIM } from '../../types';
 
 interface Props {
   onClose: () => void;
@@ -16,7 +17,8 @@ interface Props {
 
 type SearchResult = {
   track: SpotifyTrack;
-  artist: SpotifyArtist;
+  artistName: string;
+  artistId: string;
 };
 
 type Step = 'spotify' | 'youtube' | 'insight';
@@ -38,10 +40,14 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [lastFmArtist, setLastFmArtist] = useState<LastFmArtist | null>(null);
+  const [isLoadingLastFm, setIsLoadingLastFm] = useState(false);
+  const [lastFmError, setLastFmError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const remainingClaims = profile ? CLAIMS_PER_MONTH - profile.claims_this_month : 0;
   const hasYoutubeKey = !!import.meta.env.VITE_YOUTUBE_API_KEY;
+  const hasLastFmKey = !!import.meta.env.VITE_LASTFM_API_KEY;
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim() || !accessToken) return;
@@ -49,40 +55,12 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
     try {
       const data = await searchSpotify(q, accessToken);
       const tracks = data.tracks?.items || [];
-
-      const uniqueArtistIds = [...new Set(
-        tracks.slice(0, 8).map(t => t.artists[0]?.id).filter(Boolean) as string[]
-      )];
-
-      const artistMap = new Map<string, SpotifyArtist>();
-      if (uniqueArtistIds.length > 0) {
-        try {
-          const batchResult = await apiRequestBatch<{ artists: SpotifyArtist[] }>(
-            `/artists?ids=${uniqueArtistIds.join(',')}`,
-            accessToken
-          );
-          (batchResult.artists || []).forEach(a => { if (a) artistMap.set(a.id, a); });
-        } catch {
-          await Promise.all(
-            uniqueArtistIds.map(async (id) => {
-              try {
-                const a = await getArtist(id, accessToken);
-                artistMap.set(id, a);
-              } catch { /* skip */ }
-            })
-          );
-        }
-      }
-
-      const enriched = tracks.slice(0, 8).map((track) => {
-        const artistId = track.artists[0]?.id;
-        if (!artistId) return null;
-        const artist = artistMap.get(artistId);
-        if (!artist) return null;
-        return { track, artist };
-      });
-
-      setResults(enriched.filter(Boolean) as SearchResult[]);
+      const results: SearchResult[] = tracks.slice(0, 8).map((track) => ({
+        track,
+        artistName: track.artists[0]?.name || '',
+        artistId: track.artists[0]?.id || '',
+      })).filter(r => r.artistName);
+      setResults(results);
     } catch {
       setError(t('newClaim.errorSearchFailed'));
     } finally {
@@ -101,6 +79,21 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
     setSelected(result);
     setQuery('');
     setResults([]);
+    setLastFmArtist(null);
+    setLastFmError('');
+
+    // Fetch Last.fm artist data
+    if (hasLastFmKey) {
+      setIsLoadingLastFm(true);
+      try {
+        const lfm = await getLastFmArtistInfo(result.artistName);
+        setLastFmArtist(lfm);
+      } catch {
+        setLastFmError(t('lastfm.error'));
+      } finally {
+        setIsLoadingLastFm(false);
+      }
+    }
 
     if (!hasYoutubeKey) {
       setStep('insight');
@@ -111,7 +104,7 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
     setIsLoadingYoutube(true);
     setYoutubeError('');
     try {
-      const videos = await searchYouTubeVideos(result.track.name, result.artist.name);
+      const videos = await searchYouTubeVideos(result.track.name, result.artistName);
       setYoutubeVideos(videos);
     } catch {
       setYoutubeError(t('newClaim.youtubeSearchFailed'));
@@ -122,6 +115,11 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
 
   const isTooFamous = (video: YouTubeVideo): boolean => {
     return video.viewCount > MAX_YOUTUBE_VIEWS_FOR_CLAIM || video.likeCount > MAX_YOUTUBE_LIKES_FOR_CLAIM;
+  };
+
+  const isTooFamousOnLastFm = (artist: LastFmArtist | null): boolean => {
+    if (!artist) return false;
+    return parseLastFmCount(artist.stats.listeners) > MAX_LASTFM_LISTENERS_FOR_CLAIM;
   };
 
   const handleSelectVideo = (video: YouTubeVideo) => {
@@ -149,31 +147,38 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
     setError('');
 
     try {
-      const { track, artist } = selected;
+      const { track, artistName, artistId } = selected;
 
       const { data: pioneerCheck } = await supabase
         .from('claims')
         .select('id')
-        .eq('spotify_artist_id', artist.id)
+        .eq('spotify_artist_id', artistId)
         .maybeSingle();
 
       const isPioneer = !pioneerCheck;
+
+      const entryListeners = lastFmArtist ? parseLastFmCount(lastFmArtist.stats.listeners) : 0;
+      const entryPlaycount = lastFmArtist ? parseLastFmCount(lastFmArtist.stats.playcount) : 0;
+      const artistImageUrl = lastFmArtist
+        ? getLastFmImageUrl(lastFmArtist.image, 'extralarge') || track.album?.images?.[0]?.url || ''
+        : track.album?.images?.[0]?.url || '';
+      const genres = lastFmArtist?.tags?.tag?.map(tag => tag.name) || [];
 
       const { data: claimData, error: claimError } = await supabase
         .from('claims')
         .insert({
           user_id: profile.id,
-          spotify_artist_id: artist.id,
-          artist_name: artist.name,
-          artist_image_url: artist.images?.[0]?.url || '',
+          spotify_artist_id: artistId,
+          artist_name: artistName,
+          artist_image_url: artistImageUrl,
           track_id: track.id,
           track_name: track.name,
           album_cover_url: track.album?.images?.[0]?.url || '',
-          genres: artist.genres || [],
-          entry_popularity: artist.popularity,
-          entry_followers: artist.followers?.total || 0,
-          current_popularity: artist.popularity,
-          current_followers: artist.followers?.total || 0,
+          genres,
+          entry_listeners: entryListeners,
+          entry_playcount: entryPlaycount,
+          current_listeners: entryListeners,
+          current_playcount: entryPlaycount,
           vibe_index: 0,
           insight: insight.trim(),
           is_pioneer: isPioneer,
@@ -191,9 +196,9 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
 
       await supabase.from('artist_snapshots').insert({
         claim_id: claimData.id,
-        spotify_artist_id: artist.id,
-        popularity: artist.popularity,
-        followers: artist.followers?.total || 0,
+        spotify_artist_id: artistId,
+        listeners: entryListeners,
+        playcount: entryPlaycount,
         vibe_index: 0,
       });
 
@@ -358,12 +363,11 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
                                 />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-[var(--color-text)] truncate">{result.track.name}</p>
-                                  <p className="text-xs text-[var(--color-text-3)] truncate">{result.artist.name}</p>
+                                  <p className="text-xs text-[var(--color-text-3)] truncate">{result.artistName}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
-                                    <p className="text-xs font-semibold text-[var(--color-text)]">{result.artist.popularity}</p>
-                                    <p className="text-[10px] text-[var(--color-text-3)]">{t('newClaim.popularity')}</p>
+                                    <p className="text-xs text-[var(--color-text-3)]">{t('newClaim.selectToSeeStats')}</p>
                                   </div>
                                   <ChevronRight size={14} className="text-[var(--color-text-3)] opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </div>
@@ -398,8 +402,22 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-[var(--color-text)] truncate">{selected.track.name}</p>
-                          <p className="text-xs text-[var(--color-text-3)] truncate">{selected.artist.name}</p>
+                          <p className="text-xs text-[var(--color-text-3)] truncate">{selected.artistName}</p>
                         </div>
+                        {isLoadingLastFm && (
+                          <Loader2 size={12} className="text-[var(--color-text-3)] animate-spin shrink-0" />
+                        )}
+                        {lastFmArtist && isTooFamousOnLastFm(lastFmArtist) && (
+                          <span className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[10px] font-medium">
+                            <Lock size={9} />
+                            {t('lastfm.tooFamous')}
+                          </span>
+                        )}
+                        {lastFmArtist && !isTooFamousOnLastFm(lastFmArtist) && (
+                          <span className="shrink-0 text-[10px] text-[var(--color-text-3)]">
+                            {formatCount(parseLastFmCount(lastFmArtist.stats.listeners))} {t('lastfm.listeners')}
+                          </span>
+                        )}
                         <button
                           onClick={() => { setSelected(null); setStep('spotify'); }}
                           className="p-1.5 rounded-lg hover:bg-[var(--color-border)] transition-colors"
@@ -407,6 +425,13 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
                           <X size={12} className="text-[var(--color-text-3)]" />
                         </button>
                       </div>
+
+                      {lastFmError && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 text-amber-700 text-[11px]">
+                          <AlertCircle size={12} />
+                          <span>{lastFmError}</span>
+                        </div>
+                      )}
 
                       <div>
                         <div className="flex items-center gap-2 mb-3">
@@ -520,7 +545,7 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-[var(--color-text)] truncate">{selected.track.name}</p>
-                          <p className="text-xs text-[var(--color-text-3)] truncate">{selected.artist.name}</p>
+                          <p className="text-xs text-[var(--color-text-3)] truncate">{selected.artistName}</p>
                         </div>
                         {selectedVideo ? (
                           <div className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-50">
@@ -561,6 +586,21 @@ export default function NewClaimModal({ onClose, onSuccess }: Props) {
                           >
                             <X size={12} className="text-[var(--color-text-3)]" />
                           </button>
+                        </div>
+                      )}
+
+                      {lastFmArtist && (
+                        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[var(--color-surface-2)] text-xs">
+                          <span className="text-[var(--color-text-3)]">{t('lastfm.entryListeners')}:</span>
+                          <span className="font-semibold text-[var(--color-text)]">
+                            {formatCount(parseLastFmCount(lastFmArtist.stats.listeners))}
+                          </span>
+                          {isTooFamousOnLastFm(lastFmArtist) && (
+                            <span className="flex items-center gap-1 text-red-500 text-[10px]">
+                              <Lock size={9} />
+                              {t('lastfm.tooFamous')}
+                            </span>
+                          )}
                         </div>
                       )}
 

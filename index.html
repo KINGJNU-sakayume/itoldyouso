@@ -2,6 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- GitHub Pages SPA path restoration — must come before any other scripts -->
+    <script>
+      (function(l) {
+        if (l.search[1] === 'p') {
+          var params = l.search.slice(1).split('&').reduce(function(p, s) {
+            var parts = s.split('=');
+            p[parts[0]] = parts.slice(1).join('=').replace(/~and~/g, '&');
+            return p;
+          }, {});
+          if (params.p !== undefined) {
+            window.history.replaceState(
+              null, null,
+              l.pathname.split('/').slice(0, 2).join('/') +
+              params.p + (params.q ? '?' + params.q : '') +
+              l.hash
+            );
+          }
+        }
+      }(window.location));
+    </script>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rising Artist Discovery Proof</title>
