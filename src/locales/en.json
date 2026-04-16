@@ -37,16 +37,11 @@
     "makeFirstClaim": "Make First Claim"
   },
   "vault": {
-    "loginPrompt": "Connect with Spotify to view your vault.",
     "title": "The Vault",
     "totalClaims": "Total Claims",
     "validated": "Validated",
     "successRate": "Success Rate",
     "totalRespects": "Total Respects",
-    "monthlyQuota": "Monthly Claim Quota",
-    "used": "used",
-    "remaining": "claim(s) remaining",
-    "quotaReached": "Monthly quota reached — resets next month",
     "activeClaims": "Active Claims",
     "hallOfFame": "Hall of Fame",
     "noActiveClaims": "No active claims yet.",
@@ -58,7 +53,6 @@
     "likes": "Likes"
   },
   "badges": {
-    "loginPrompt": "Connect with Spotify to view your badges.",
     "title": "Badge Collection",
     "subtitle": "35 achievements tracking your cultural instincts"
   },
@@ -95,7 +89,6 @@
   },
   "newClaim": {
     "title": "New Claim",
-    "remaining": "claim(s) remaining this month",
     "searchPlaceholder": "Search Track or Artist",
     "searchHint": "e.g. Olivia Dean, Cool",
     "insightLabel": "Your Insight",
@@ -109,19 +102,12 @@
     "registering": "Registering Claim...",
     "stakeClaim": "Stake This Claim",
     "errorMinChars": "Your insight must be at least 20 characters.",
-    "errorQuotaExceeded": "You've used all your claims for this month.",
     "errorSearchFailed": "Search failed. Please try again.",
     "errorSubmitFailed": "Failed to submit claim. Please try again.",
     "selectToSeeStats": "Select to see stats",
-    "youtubeSelectLabel": "Select YouTube Video",
-    "youtubeSearching": "Searching YouTube...",
-    "youtubeSearchFailed": "Could not load YouTube results. You can skip this step.",
-    "youtubeNoResults": "No YouTube results found. You can skip this step.",
-    "youtubeLinked": "YouTube linked",
-    "youtubeRequired": "YouTube required",
-    "youtubeClaimRule": "Only underground tracks qualify. Songs with over 5M views or 100K likes cannot be claimed.",
-    "errorYoutubeRequired": "You must select a YouTube video to submit a claim.",
-    "back": "Back"
+    "listenersLabel": "Spotify Monthly Listeners",
+    "listenersHint": "(optional — paste the number shown on the artist's Spotify page)",
+    "listenersPlaceholder": "e.g. 42500"
   },
   "claimChart": {
     "listeners": "Listeners",
@@ -154,11 +140,7 @@
   "lastfm": {
     "listeners": "listeners",
     "playcount": "total plays",
-    "tooFamous": "Too mainstream (over 1M listeners)",
-    "loading": "Loading Last.fm stats...",
-    "error": "Last.fm data unavailable",
-    "entryListeners": "Listeners at claim time",
-    "currentListeners": "Listeners now"
+    "entryListeners": "Listeners at claim time"
   },
   "badgeNames": {
     "clairvoyant": "Clairvoyant",

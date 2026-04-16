@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/authStore';
 
 export default function Header() {
-  const { profile, spotifyUser, logout } = useAuthStore();
+  const { accessToken, logout } = useAuthStore();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const { t, i18n } = useTranslation();
@@ -19,13 +19,11 @@ export default function Header() {
     localStorage.setItem('language', next);
   };
 
-  const navLinks = profile
-    ? [
-        { href: '/', label: t('nav.discoveryWall'), icon: Music },
-        { href: '/vault', label: t('nav.vault'), icon: LayoutDashboard },
-        { href: '/badges', label: t('nav.badges'), icon: Sparkles },
-      ]
-    : [];
+  const navLinks = [
+    { href: '/', label: t('nav.discoveryWall'), icon: Music },
+    { href: '/vault', label: t('nav.vault'), icon: LayoutDashboard },
+    { href: '/badges', label: t('nav.badges'), icon: Sparkles },
+  ];
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[var(--color-border)]">
@@ -40,24 +38,22 @@ export default function Header() {
             </span>
           </Link>
 
-          {navLinks.length > 0 && (
-            <nav className="hidden md:flex items-center gap-1">
-              {navLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  to={href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive(href)
-                      ? 'bg-[var(--color-text)] text-white'
-                      : 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  <Icon size={15} />
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          )}
+          <nav className="hidden md:flex items-center gap-1">
+            {navLinks.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                to={href}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  isActive(href)
+                    ? 'bg-[var(--color-text)] text-white'
+                    : 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </Link>
+            ))}
+          </nav>
 
           <div className="flex items-center gap-3">
             <button
@@ -70,36 +66,22 @@ export default function Header() {
               <span className={i18n.language === 'ko' ? 'text-[var(--color-text)]' : 'text-[var(--color-text-3)]'}>KO</span>
             </button>
 
-            {profile && (
-              <>
-                <Link to="/profile" className="hidden md:flex items-center gap-2.5 group">
-                  <img
-                    src={spotifyUser?.images[0]?.url || `https://api.dicebear.com/7.x/initials/svg?seed=${profile.display_name}`}
-                    alt={profile.display_name}
-                    className="w-8 h-8 rounded-full object-cover ring-2 ring-[var(--color-border)] group-hover:ring-[var(--color-primary)] transition-all"
-                  />
-                  <span className="text-sm font-medium text-[var(--color-text-2)] group-hover:text-[var(--color-text)] transition-colors">
-                    {profile.display_name}
-                  </span>
-                </Link>
-                <button
-                  onClick={logout}
-                  className="hidden md:flex btn-ghost text-xs"
-                  title={t('nav.signOut')}
-                >
-                  <LogOut size={15} />
-                </button>
-              </>
-            )}
-
-            {navLinks.length > 0 && (
+            {accessToken && (
               <button
-                className="md:hidden p-2 rounded-xl hover:bg-[var(--color-surface-2)] transition-colors"
-                onClick={() => setMenuOpen(!menuOpen)}
+                onClick={logout}
+                className="hidden md:flex btn-ghost text-xs"
+                title={t('nav.signOut')}
               >
-                {menuOpen ? <X size={20} /> : <Menu size={20} />}
+                <LogOut size={15} />
               </button>
             )}
+
+            <button
+              className="md:hidden p-2 rounded-xl hover:bg-[var(--color-surface-2)] transition-colors"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
       </div>
@@ -128,7 +110,7 @@ export default function Header() {
                   {label}
                 </Link>
               ))}
-              {profile && (
+              {accessToken && (
                 <button
                   onClick={() => { logout(); setMenuOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] transition-all"

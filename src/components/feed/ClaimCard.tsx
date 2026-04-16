@@ -5,7 +5,13 @@ import { useTranslation } from 'react-i18next';
 import type { Claim } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
-import { formatCount } from '../../lib/youtube';
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
+}
 
 interface Props {
   claim: Claim;
@@ -28,7 +34,7 @@ function useTimeAgo() {
 }
 
 export default function ClaimCard({ claim, onUpdate, onShareCard }: Props) {
-  const { profile } = useAuthStore();
+  const { accessToken } = useAuthStore();
   const { t } = useTranslation();
   const timeAgo = useTimeAgo();
   const [isRespecting, setIsRespecting] = useState(false);
@@ -39,7 +45,7 @@ export default function ClaimCard({ claim, onUpdate, onShareCard }: Props) {
   const vibeDisplay = `${vibePositive ? '+' : ''}${claim.vibe_index}%`;
 
   const handleRespect = async () => {
-    if (!profile || isRespecting) return;
+    if (!accessToken || isRespecting) return;
     setIsRespecting(true);
 
     if (hasRespected) {
@@ -47,13 +53,13 @@ export default function ClaimCard({ claim, onUpdate, onShareCard }: Props) {
         .from('respects')
         .delete()
         .eq('claim_id', claim.id)
-        .eq('user_id', profile.id);
+        .eq('user_id', 'local-user');
       setHasRespected(false);
       setRespectCount(c => Math.max(0, c - 1));
     } else {
       await supabase
         .from('respects')
-        .insert({ claim_id: claim.id, user_id: profile.id });
+        .insert({ claim_id: claim.id, user_id: 'local-user' });
       setHasRespected(true);
       setRespectCount(c => c + 1);
     }
@@ -112,16 +118,6 @@ export default function ClaimCard({ claim, onUpdate, onShareCard }: Props) {
 
         <div className="p-4">
           <div className="flex items-center gap-3 mb-3">
-            {claim.profile && (
-              <div className="flex items-center gap-2 min-w-0">
-                <img
-                  src={claim.profile.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${claim.profile.display_name}`}
-                  alt={claim.profile.display_name}
-                  className="w-6 h-6 rounded-full object-cover"
-                />
-                <span className="text-xs text-[var(--color-text-2)] truncate">{claim.profile.display_name}</span>
-              </div>
-            )}
             <span className="text-xs text-[var(--color-text-3)] ml-auto shrink-0">
               {timeAgo(claim.created_at)}
             </span>
@@ -202,7 +198,7 @@ export default function ClaimCard({ claim, onUpdate, onShareCard }: Props) {
             <motion.button
               whileTap={{ scale: 0.85 }}
               onClick={handleRespect}
-              disabled={!profile || isRespecting}
+              disabled={!accessToken || isRespecting}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 ${
                 hasRespected
                   ? 'bg-red-50 text-red-500'

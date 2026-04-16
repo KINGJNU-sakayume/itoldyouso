@@ -17,13 +17,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import type { Claim } from '../types';
-import { useAuthStore } from '../store/authStore';
 import ClaimChart from '../components/dashboard/ClaimChart';
 import BadgeGrid from '../components/badges/BadgeGrid';
 import BadgeEarnedToast from '../components/badges/BadgeEarnedToast';
 import ProofOfTasteCard from '../components/card-generator/ProofOfTasteCard';
 import { useBadgeStore } from '../store/badgeStore';
-import { CLAIMS_PER_MONTH } from '../types';
 
 function formatFollowers(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -204,7 +202,6 @@ function VaultClaimRow({ claim, onShare }: { claim: Claim; onShare: (c: Claim) =
 }
 
 export default function Vault() {
-  const { profile } = useAuthStore();
   const { t } = useTranslation();
   const [claims, setClaims] = useState<Claim[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,57 +210,37 @@ export default function Vault() {
   const { fetchUserBadges, checkAndAwardBadges, newlyEarned, clearNewlyEarned } = useBadgeStore();
 
   const fetchClaims = useCallback(async () => {
-    if (!profile) return;
     setIsLoading(true);
     try {
       const { data } = await supabase
         .from('claims')
         .select('*')
-        .eq('user_id', profile.id)
+        .eq('user_id', 'local-user')
         .order('created_at', { ascending: false });
 
       if (data) {
         setClaims(data);
-        await checkAndAwardBadges(profile, data);
+        await checkAndAwardBadges(data);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [profile]);
+  }, []);
 
   useEffect(() => {
-    if (profile) {
-      fetchClaims();
-      fetchUserBadges(profile.id);
-    }
-  }, [profile]);
-
-  if (!profile) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-24 text-center">
-        <p className="text-[var(--color-text-2)]">{t('vault.loginPrompt')}</p>
-      </div>
-    );
-  }
+    fetchClaims();
+    fetchUserBadges('local-user');
+  }, []);
 
   const activeClaims = claims.filter(c => !c.is_validated);
   const hofClaims = claims.filter(c => c.is_validated);
   const totalRespects = claims.reduce((sum, c) => sum + c.respect_count, 0);
   const successRate = claims.length > 0 ? Math.round((hofClaims.length / claims.length) * 100) : 0;
-  const remainingClaims = CLAIMS_PER_MONTH - profile.claims_this_month;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-      <div className="flex items-start gap-4 mb-8">
-        <img
-          src={profile.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${profile.display_name}`}
-          alt={profile.display_name}
-          className="w-16 h-16 rounded-2xl object-cover"
-        />
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--color-text)]">{profile.display_name}</h1>
-          <p className="text-sm text-[var(--color-text-3)] mt-1">{t('vault.title')}</p>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-[var(--color-text)]">{t('vault.title')}</h1>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
@@ -280,27 +257,8 @@ export default function Vault() {
         ))}
       </div>
 
-      <div className="card p-4 mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-semibold text-[var(--color-text)]">{t('vault.monthlyQuota')}</p>
-          <p className="text-xs text-[var(--color-text-3)]">{profile.claims_this_month}/{CLAIMS_PER_MONTH} {t('vault.used')}</p>
-        </div>
-        <div className="h-2 bg-[var(--color-surface-2)] rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${(profile.claims_this_month / CLAIMS_PER_MONTH) * 100}%` }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="h-full rounded-full"
-            style={{ background: remainingClaims > 0 ? 'var(--color-accent)' : '#C45A5A' }}
-          />
-        </div>
-        <p className="text-xs text-[var(--color-text-3)] mt-2">
-          {remainingClaims > 0 ? `${remainingClaims} ${t('vault.remaining')}` : t('vault.quotaReached')}
-        </p>
-      </div>
-
       <div className="mb-8">
-        <BadgeGrid userId={profile.id} compact />
+        <BadgeGrid userId="local-user" compact />
       </div>
 
       <div className="flex gap-2 mb-6">

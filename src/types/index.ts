@@ -1,15 +1,3 @@
-export interface Profile {
-  id: string;
-  spotify_id: string;
-  display_name: string;
-  avatar_url: string;
-  spotify_url: string;
-  claims_this_month: number;
-  last_claim_reset: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Claim {
   id: string;
   user_id: string;
@@ -38,7 +26,6 @@ export interface Claim {
   entry_youtube_like_count: number | null;
   created_at: string;
   updated_at: string;
-  profile?: Profile;
   has_respected?: boolean;
 }
 
@@ -112,10 +99,5 @@ export interface SpotifySearchResult {
 
 export type BadgeRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
-export const CLAIMS_PER_MONTH = 5;
 export const VALIDATION_THRESHOLD = 50;
 export const PIONEER_CHECK = true;
-
-export const MAX_YOUTUBE_VIEWS_FOR_CLAIM = 5_000_000;
-export const MAX_YOUTUBE_LIKES_FOR_CLAIM = 100_000;
-export const MAX_LASTFM_LISTENERS_FOR_CLAIM = 1_000_000;

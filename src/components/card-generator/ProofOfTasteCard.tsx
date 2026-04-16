@@ -5,8 +5,13 @@ import html2canvas from 'html2canvas';
 import { useTranslation } from 'react-i18next';
 import type { Claim } from '../../types';
 import { extractDominantColors } from '../../lib/colors';
-import { useAuthStore } from '../../store/authStore';
-import { formatCount } from '../../lib/youtube';
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
+}
 
 interface Props {
   claim: Claim;
@@ -21,7 +26,6 @@ interface ColorScheme {
 }
 
 export default function ProofOfTasteCard({ claim, onClose }: Props) {
-  const { profile } = useAuthStore();
   const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement>(null);
   const [colors, setColors] = useState<ColorScheme>({
@@ -248,7 +252,7 @@ export default function ProofOfTasteCard({ claim, onClose }: Props) {
                       <div>
                         <p className="text-white/40 text-[8px] uppercase tracking-wider">{t('proofCard.claimedBy')}</p>
                         <p className="text-white/80 text-[10px] font-medium mt-0.5">
-                          {profile?.display_name || 'Anonymous'}
+                          Anonymous
                         </p>
                       </div>
                       <div className="text-right">

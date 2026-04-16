@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Badge, UserBadge, Claim, Profile } from '../types';
+import type { Badge, UserBadge, Claim } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface BadgeState {
@@ -8,7 +8,7 @@ interface BadgeState {
   newlyEarned: UserBadge[];
   fetchBadges: () => Promise<void>;
   fetchUserBadges: (userId: string) => Promise<void>;
-  checkAndAwardBadges: (profile: Profile, claims: Claim[]) => Promise<UserBadge[]>;
+  checkAndAwardBadges: (claims: Claim[]) => Promise<UserBadge[]>;
   clearNewlyEarned: () => void;
 }
 
@@ -42,14 +42,14 @@ export const useBadgeStore = create<BadgeState>((set, get) => ({
     if (data) set({ userBadges: data });
   },
 
-  checkAndAwardBadges: async (profile: Profile, claims: Claim[]): Promise<UserBadge[]> => {
+  checkAndAwardBadges: async (claims: Claim[]): Promise<UserBadge[]> => {
     const { userBadges } = get();
     const earnedIds = new Set(userBadges.map(ub => ub.badge_id));
     const newlyEarned: UserBadge[] = [];
 
     const award = async (badgeId: string, claimId?: string) => {
       if (earnedIds.has(badgeId)) return;
-      const badge = await awardBadge(profile.id, badgeId, claimId);
+      const badge = await awardBadge('local-user', badgeId, claimId);
       if (badge) {
         earnedIds.add(badgeId);
         newlyEarned.push(badge);
@@ -151,10 +151,6 @@ export const useBadgeStore = create<BadgeState>((set, get) => ({
       return h >= 0 && h < 6;
     });
     if (owlClaims.length >= 10) await award('night_owl');
-
-    const accountAge = (now.getTime() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24);
-    if (accountAge >= 180) await award('loyal_scout');
-    if (accountAge >= 365) await award('the_veteran');
 
     if (validatedClaims.length >= 5) await award('prophetic_vision');
     if (validatedClaims.length >= 3) await award('perfect_record');

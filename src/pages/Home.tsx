@@ -8,12 +8,11 @@ import { useAuthStore } from '../store/authStore';
 import ClaimCard from '../components/feed/ClaimCard';
 import NewClaimModal from '../components/feed/NewClaimModal';
 import ProofOfTasteCard from '../components/card-generator/ProofOfTasteCard';
-import { CLAIMS_PER_MONTH } from '../types';
 
 type FilterType = 'all' | 'validated' | 'pioneer' | 'trending';
 
 export default function Home() {
-  const { profile } = useAuthStore();
+  const { accessToken } = useAuthStore();
   const { t } = useTranslation();
   const [claims, setClaims] = useState<Claim[]>([]);
   const [filter, setFilter] = useState<FilterType>('all');
@@ -26,7 +25,7 @@ export default function Home() {
     try {
       let query = supabase
         .from('claims')
-        .select('*, profile:profiles(*)')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(60);
 
@@ -39,11 +38,11 @@ export default function Home() {
 
       let enrichedClaims = data as Claim[];
 
-      if (profile) {
+      if (accessToken) {
         const { data: respects } = await supabase
           .from('respects')
           .select('claim_id')
-          .eq('user_id', profile.id);
+          .eq('user_id', 'local-user');
 
         const respectedIds = new Set((respects || []).map(r => r.claim_id));
         enrichedClaims = enrichedClaims.map(c => ({
@@ -56,11 +55,9 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [filter, profile]);
+  }, [filter, accessToken]);
 
   useEffect(() => { fetchClaims(); }, [fetchClaims]);
-
-  const remainingClaims = profile ? CLAIMS_PER_MONTH - profile.claims_this_month : 0;
 
   const FILTERS: { id: FilterType; label: string }[] = [
     { id: 'all', label: t('home.filterAll') },
@@ -86,17 +83,13 @@ export default function Home() {
           >
             <RefreshCw size={16} />
           </button>
-          {profile && (
+          {accessToken && (
             <button
               onClick={() => setShowNewClaim(true)}
-              disabled={remainingClaims <= 0}
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="btn-primary"
             >
               <Plus size={16} />
               {t('home.newClaim')}
-              <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-xs">
-                {remainingClaims}/{CLAIMS_PER_MONTH}
-              </span>
             </button>
           )}
         </div>
@@ -150,11 +143,11 @@ export default function Home() {
             {filter === 'all' ? t('home.noClaimsYet') : t('home.noMatches')}
           </h3>
           <p className="text-sm text-[var(--color-text-2)] max-w-xs">
-            {filter === 'all' && profile
+            {filter === 'all' && accessToken
               ? t('home.noClaimsDesc')
               : t('home.noMatchesDesc')}
           </p>
-          {filter === 'all' && profile && (
+          {filter === 'all' && accessToken && (
             <button
               onClick={() => setShowNewClaim(true)}
               className="btn-primary mt-6"

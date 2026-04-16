@@ -9,15 +9,8 @@ import Vault from './pages/Vault';
 import Badges from './pages/Badges';
 import Callback from './pages/Callback';
 
-function AuthLayout({ children }: { children: React.ReactNode }) {
-  const { profile, isInitialized } = useAuthStore();
-  if (!isInitialized) return null;
-  if (!profile) return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
-
 function AppContent() {
-  const { isInitialized, initialize, profile } = useAuthStore();
+  const { isInitialized, initialize, accessToken } = useAuthStore();
   const location = useLocation();
   const { i18n } = useTranslation();
 
@@ -58,7 +51,7 @@ function AppContent() {
         <Route
           path="/"
           element={
-            profile ? (
+            accessToken ? (
               <>
                 <Header />
                 <Home />
@@ -71,19 +64,19 @@ function AppContent() {
         <Route
           path="/vault"
           element={
-            <AuthLayout>
+            <>
               <Header />
               <Vault />
-            </AuthLayout>
+            </>
           }
         />
         <Route
           path="/badges"
           element={
-            <AuthLayout>
+            <>
               <Header />
               <Badges />
-            </AuthLayout>
+            </>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
