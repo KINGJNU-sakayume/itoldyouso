@@ -1,20 +1,16 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>ITYS</title>
-  <script>
-    // GitHub Pages SPA redirect
-    // Encodes the path and query string into a redirect to index.html
-    var l = window.location;
-    l.replace(
-      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-      l.pathname.split('/').slice(0, 2).join('/') +
-      '/?p=/' + l.pathname.slice(1).replace(/&/g, '~and~') +
-      (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-      l.hash
-    );
-  </script>
-</head>
-<body></body>
+  <head>
+    <meta charset="utf-8" />
+    <title>I Told You So</title>
+    <script>
+      // The app uses hash routes (#/…), so any other path is a stale link.
+      // Send it to the app root: /<repo>/ on project pages, / on a custom domain.
+      var seg = location.pathname.split('/')[1];
+      var target = seg ? '/' + seg + '/' : '/';
+      if (target === location.pathname) target = '/';
+      location.replace(target);
+    </script>
+  </head>
+  <body></body>
 </html>

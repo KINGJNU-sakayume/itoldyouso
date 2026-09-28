@@ -1,78 +1,51 @@
-const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string;
-const BASE_URL = 'https://www.googleapis.com/youtube/v3';
+const ID_RE = /^[\w-]{11}$/;
 
-export interface YouTubeVideo {
-  id: string;
-  title: string;
-  channelTitle: string;
-  thumbnailUrl: string;
-  viewCount: number;
-  likeCount: number;
-  publishedAt: string;
+/** Accepts watch, youtu.be, shorts, embed, live and music.youtube.com links, or a bare id. */
+export function parseYouTubeId(input: string | undefined | null): string | null {
+  const raw = input?.trim();
+  if (!raw) return null;
+  if (ID_RE.test(raw)) return raw;
+
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.replace(/^(www|m|music)\./, '');
+  let id: string | null = null;
+  if (host === 'youtu.be') {
+    id = url.pathname.split('/')[1] ?? null;
+  } else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    if (url.pathname === '/watch') {
+      id = url.searchParams.get('v');
+    } else {
+      const [, kind, rest] = url.pathname.split('/');
+      if (['shorts', 'embed', 'live', 'v'].includes(kind)) id = rest ?? null;
+    }
+  }
+  return id && ID_RE.test(id) ? id : null;
 }
 
-export async function searchYouTubeVideos(
-  trackName: string,
-  artistName: string
-): Promise<YouTubeVideo[]> {
-  if (!API_KEY) throw new Error('YouTube API key not configured');
-
-  const query = `${artistName} ${trackName} official`;
-  const searchParams = new URLSearchParams({
-    part: 'snippet',
-    q: query,
-    type: 'video',
-    maxResults: '6',
-    key: API_KEY,
-  });
-
-  const searchRes = await fetch(`${BASE_URL}/search?${searchParams}`);
-  if (!searchRes.ok) throw new Error(`YouTube search failed: ${searchRes.status}`);
-
-  const searchData = await searchRes.json();
-  const videoIds: string[] = (searchData.items || []).map(
-    (item: { id: { videoId: string } }) => item.id.videoId
-  );
-
-  if (videoIds.length === 0) return [];
-
-  const statsParams = new URLSearchParams({
-    part: 'statistics,snippet',
-    id: videoIds.join(','),
-    key: API_KEY,
-  });
-
-  const statsRes = await fetch(`${BASE_URL}/videos?${statsParams}`);
-  if (!statsRes.ok) throw new Error(`YouTube stats fetch failed: ${statsRes.status}`);
-
-  const statsData = await statsRes.json();
-
-  return (statsData.items || []).map((item: {
-    id: string;
-    snippet: {
-      title: string;
-      channelTitle: string;
-      thumbnails: { medium?: { url: string }; default?: { url: string } };
-      publishedAt: string;
-    };
-    statistics: {
-      viewCount?: string;
-      likeCount?: string;
-    };
-  }) => ({
-    id: item.id,
-    title: item.snippet.title,
-    channelTitle: item.snippet.channelTitle,
-    thumbnailUrl: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
-    viewCount: parseInt(item.statistics?.viewCount || '0', 10),
-    likeCount: parseInt(item.statistics?.likeCount || '0', 10),
-    publishedAt: item.snippet.publishedAt,
-  }));
+/** 16:9, no letterbox bars. */
+export function youtubeThumb(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 }
 
-export function formatCount(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
+/** 4:3 with bars — crop with object-fit: cover. */
+export function youtubeThumbLarge(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+}
+
+export function youtubeWatchUrl(id: string): string {
+  return `https://www.youtube.com/watch?v=${id}`;
+}
+
+/** Cover art for a pick: the explicit image, else the YouTube thumbnail. */
+export function coverUrl(c: { imageUrl?: string; youtubeUrl?: string }, large = false): string | null {
+  if (c.imageUrl) return c.imageUrl;
+  const id = parseYouTubeId(c.youtubeUrl);
+  if (!id) return null;
+  return large ? youtubeThumbLarge(id) : youtubeThumb(id);
 }

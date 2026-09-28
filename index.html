@@ -1,36 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <!-- GitHub Pages SPA path restoration — must come before any other scripts -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>I Told You So</title>
+    <meta name="description" content="뜰 곡을 먼저 알아본 기록. A private log of songs you called before they blew up." />
+    <meta name="theme-color" content="#F3F1EC" data-default="#F3F1EC" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141413" data-default="#141413" media="(prefers-color-scheme: dark)" />
+    <meta name="robots" content="noindex" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ITYS" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap"
+    />
     <script>
-      (function(l) {
-        if (l.search[1] === 'p') {
-          var params = l.search.slice(1).split('&').reduce(function(p, s) {
-            var parts = s.split('=');
-            p[parts[0]] = parts.slice(1).join('=').replace(/~and~/g, '&');
-            return p;
-          }, {});
-          if (params.p !== undefined) {
-            window.history.replaceState(
-              null, null,
-              l.pathname.split('/').slice(0, 2).join('/') +
-              params.p + (params.q ? '?' + params.q : '') +
-              l.hash
-            );
-          }
-        }
-      }(window.location));
+      // Apply the saved theme before first paint.
+      try {
+        var t = localStorage.getItem('itys-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
     </script>
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rising Artist Discovery Proof</title>
-    <meta property="og:image" content="https://bolt.new/static/og_default.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>JavaScript가 필요합니다.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
