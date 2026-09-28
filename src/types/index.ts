@@ -58,7 +58,7 @@ export interface Settings {
   staleDays: number;
 }
 
-/** Everything that is stored, exported and synced. */
+/** Everything that is stored and exported. */
 export interface VaultDoc {
   app: 'itoldyouso';
   version: 2;

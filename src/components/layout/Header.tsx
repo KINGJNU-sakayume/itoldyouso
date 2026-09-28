@@ -2,24 +2,10 @@ import { Link, NavLink } from 'react-router-dom';
 import { ListOrdered, Plus, RefreshCcw, Settings2, Award } from 'lucide-react';
 import { useLang } from '../../lib/i18n';
 import { useVault } from '../../store/vaultStore';
-import { useSync } from '../../store/authStore';
 import { isStale } from '../../lib/metrics';
 
 function useDueCount() {
   return useVault(s => s.claims.filter(c => isStale(c, s.settings.staleDays)).length);
-}
-
-function SyncState() {
-  const { t } = useLang();
-  const status = useSync(s => s.status);
-  if (status === 'off' || status === 'signed-out' || status === 'loading') return null;
-  const tone = status === 'error' ? 'bg-accent' : status === 'syncing' ? 'bg-ink-3 animate-pulse' : 'bg-ink-2';
-  return (
-    <Link to="/settings#sync" className="flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink" title={t(`sync.${status}`)}>
-      <span className={`h-1.5 w-1.5 rounded-full ${tone}`} />
-      <span className={status === 'error' ? 'up' : 'hidden sm:inline'}>{t(`sync.${status}`)}</span>
-    </Link>
-  );
 }
 
 function Count({ n }: { n: number }) {
@@ -63,7 +49,6 @@ export default function Header({ hideTabs }: { hideTabs?: boolean }) {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-4">
-            <SyncState />
             <Link to="/new" className="btn btn-primary hidden md:inline-flex">
               <Plus size={15} strokeWidth={2.25} />
               {t('nav.new')}

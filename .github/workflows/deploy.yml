@@ -30,14 +30,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-      - name: Build
-        run: npm run build
-        env:
-          # Optional. Without these the site stores everything in the browser
-          # and the build still succeeds. Add them under
-          # Settings → Secrets and variables → Actions to turn on cloud sync.
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - run: npm run build
 
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

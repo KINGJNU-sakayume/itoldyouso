@@ -10,7 +10,6 @@ import Record from './pages/Record';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import { useVault } from './store/vaultStore';
-import { useSync } from './store/authStore';
 import { toast } from './store/toastStore';
 import { evaluateAchievements } from './lib/achievements';
 import { useLang } from './lib/i18n';
@@ -22,12 +21,9 @@ function AchievementWatcher() {
   const claims = useVault(s => s.claims);
   const seen = useVault(s => s.seen);
   const markSeen = useVault(s => s.markSeen);
-  // Wait for the first cloud pull so another device's progress isn't re-announced.
-  const ready = useSync(s => s.ready);
   const earned = useMemo(() => evaluateAchievements(claims).filter(a => a.earnedAt), [claims]);
 
   useEffect(() => {
-    if (!ready) return;
     const fresh = earned.filter(a => !seen.includes(a.id));
     if (!fresh.length) return;
     markSeen(fresh.map(a => a.id));
@@ -43,7 +39,7 @@ function AchievementWatcher() {
     fresh.forEach(a =>
       toast({ kind: 'achievement', mark: a.glyph, title: t(`ach.${a.id}.name`), body: t(`ach.${a.id}.desc`) }),
     );
-  }, [earned, seen, ready, markSeen, navigate, t]);
+  }, [earned, seen, markSeen, navigate, t]);
 
   return null;
 }
@@ -120,7 +116,6 @@ function Shell() {
 }
 
 export default function App() {
-  useEffect(() => useSync.getState().start(), []);
   return (
     <HashRouter>
       <Shell />

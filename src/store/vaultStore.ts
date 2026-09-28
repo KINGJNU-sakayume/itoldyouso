@@ -20,8 +20,6 @@ interface VaultActions {
   updateSettings: (patch: Partial<Settings>) => void;
   markSeen: (ids: string[]) => void;
   getDoc: () => VaultDoc;
-  /** Used by sync: the merged document becomes the local state. */
-  replaceDoc: (doc: VaultDoc) => void;
   importDoc: (doc: VaultDoc, mode: 'merge' | 'replace') => void;
   resetAll: () => void;
 }
@@ -171,8 +169,6 @@ export const useVault = create<VaultState>()(
 
         getDoc: () => ({ app: 'itoldyouso', version: 2, ...dataOf(get()) }),
 
-        replaceDoc: doc => set(dataOf(doc)),
-
         importDoc: (doc, mode) => {
           const current = get().getDoc();
           if (mode === 'merge') {
@@ -185,7 +181,7 @@ export const useVault = create<VaultState>()(
           for (const c of current.claims) if (!incoming.has(c.id)) tombstones[c.id] = t;
           for (const c of doc.claims) delete tombstones[c.id];
           set({
-            // Bumped so the imported copy also wins against other synced devices.
+            // Bumped so the imported copy is the newest edit if it's merged again later.
             claims: doc.claims.map(c => ({ ...c, updatedAt: t })),
             tombstones,
             settings: doc.settings,

@@ -2,15 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { Lang, VaultDoc } from '../types';
 import { useVault } from '../store/vaultStore';
-import { useSync } from '../store/authStore';
 import { toast } from '../store/toastStore';
 import { setLang, useLang } from '../lib/i18n';
 import { applyTheme, getTheme, type Theme } from '../lib/theme';
-import { dateStamp, downloadText, emptyDoc, normalizeDoc, toBackupJson, toCsv } from '../lib/doc';
+import { dateStamp, downloadText, normalizeDoc, toBackupJson, toCsv } from '../lib/doc';
 import { fmtAgo, fmtDate, fmtDateTime, fmtMult } from '../lib/format';
-import { cloudEnabled, fetchLegacyClaims } from '../lib/supabase';
-import { mapLegacyClaims } from '../lib/legacy';
-import { reconcileStatus } from '../lib/metrics';
 
 const LAST_BACKUP_KEY = 'itys-last-backup';
 
@@ -138,7 +134,6 @@ export default function Settings() {
       </Group>
 
       <Backup />
-      <Sync />
       <Danger />
 
       <p className="num border-t border-rule pt-4 text-[12px] text-ink-3">
@@ -197,7 +192,7 @@ function Backup() {
   return (
     <Group id="backup" title={t('settings.backup')}>
       <p className="text-[13px] leading-relaxed text-ink-2">
-        {cloudEnabled ? t('settings.backupLeadCloud') : t('settings.backupLead')}
+        {t('settings.backupLead')}
       </p>
       <p className="mt-2 text-[13px] text-ink-3">
         {lastBackup ? t('settings.lastBackup', { ago: fmtAgo(lastBackup, lang) }) : t('settings.neverBackedUp')}
@@ -241,118 +236,6 @@ function Backup() {
           <p className="mt-2 text-[12px] text-ink-3">{t('settings.importHint')}</p>
         </div>
       )}
-    </Group>
-  );
-}
-
-function Sync() {
-  const { t, lang } = useLang();
-  const { status, email, lastSyncedAt, error, signIn, signOut, syncNow } = useSync();
-  const importDoc = useVault(s => s.importDoc);
-  const settings = useVault(s => s.settings);
-  const [form, setForm] = useState({ email: '', password: '' });
-  const [busy, setBusy] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [legacy, setLegacy] = useState<'idle' | 'loading' | string>('idle');
-
-  if (!cloudEnabled) {
-    return (
-      <Group id="sync" title={t('settings.sync')}>
-        <p className="text-[13px] leading-relaxed text-ink-2">{t('settings.syncOff')}</p>
-      </Group>
-    );
-  }
-
-  const login = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setLoginError(null);
-    try {
-      await signIn(form.email.trim(), form.password);
-      setForm({ email: '', password: '' });
-    } catch (err) {
-      setLoginError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const importLegacy = async () => {
-    setLegacy('loading');
-    try {
-      const { claims, skipped } = mapLegacyClaims(await fetchLegacyClaims());
-      if (!claims.length) {
-        setLegacy(t('settings.legacyNone'));
-        return;
-      }
-      importDoc({ ...emptyDoc(), claims: claims.map(c => reconcileStatus(c, settings)) }, 'merge');
-      setLegacy(t('settings.legacyDone', { count: claims.length, skipped }));
-    } catch (err) {
-      setLegacy(`${t('settings.legacyFailed')} (${err instanceof Error ? err.message : String(err)})`);
-    }
-  };
-
-  return (
-    <Group id="sync" title={t('settings.sync')}>
-      {status === 'signed-out' || status === 'loading' ? (
-        <form onSubmit={login} className="mt-2 space-y-3">
-          <p className="text-[13px] leading-relaxed text-ink-2">{t('settings.syncLead')}</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              type="email"
-              autoComplete="username"
-              placeholder={t('settings.email')}
-              aria-label={t('settings.email')}
-              value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="field"
-              required
-            />
-            <input
-              type="password"
-              autoComplete="current-password"
-              placeholder={t('settings.password')}
-              aria-label={t('settings.password')}
-              value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              className="field"
-              required
-            />
-          </div>
-          {loginError && <p className="up text-[13px]">{loginError}</p>}
-          <button type="submit" className="btn btn-primary" disabled={busy || status === 'loading'}>
-            {t('settings.signIn')}
-          </button>
-        </form>
-      ) : (
-        <div className="mt-2">
-          <p className="text-sm">
-            {email}
-            <span className={`ml-3 text-[13px] ${status === 'error' ? 'up' : 'text-ink-3'}`}>
-              {t(`sync.${status}`)}
-              {status === 'synced' && lastSyncedAt && ` · ${fmtAgo(lastSyncedAt, lang)}`}
-            </span>
-          </p>
-          {error && <p className="up mt-1 text-[13px]">{error}</p>}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button className="btn btn-line btn-sm" onClick={syncNow} disabled={status === 'syncing'}>
-              {t('settings.syncNow')}
-            </button>
-            <button className="btn btn-quiet btn-sm" onClick={() => void signOut()}>
-              {t('settings.signOut')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 border-t border-rule pt-4">
-        <p className="text-sm font-medium">{t('settings.legacy')}</p>
-        <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{t('settings.legacyHint')}</p>
-        <button className="btn btn-quiet btn-sm mt-2 -ml-2.5" onClick={importLegacy} disabled={legacy === 'loading'}>
-          {legacy === 'loading' ? t('settings.legacyLoading') : t('settings.legacyRun')}
-        </button>
-        {legacy !== 'idle' && legacy !== 'loading' && <p className="mt-1 text-[13px] text-ink-2">{legacy}</p>}
-      </div>
     </Group>
   );
 }

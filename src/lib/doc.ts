@@ -20,7 +20,7 @@ export function emptyDoc(): VaultDoc {
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
-// Imported files and remote documents are untrusted input: keep what is valid,
+// Imported files and stored state are untrusted input: keep what is valid,
 // drop what is not, never throw.
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
@@ -137,9 +137,10 @@ export function normalizeDoc(raw: unknown): VaultDoc | null {
 // ── Merge ─────────────────────────────────────────────────────────────────────
 
 /**
- * Merges two copies of the vault, e.g. phone and laptop. Each pick is resolved
- * on its own (newest edit wins), deletions win over older edits, and settings
- * take the most recently changed side. Commutative, so both devices converge.
+ * Merges two copies of the vault, e.g. this browser and a backup file. Each
+ * pick is resolved on its own (newest edit wins), deletions win over older
+ * edits, and settings take the most recently changed side. Commutative, so
+ * the order of the two copies doesn't matter.
  */
 export function mergeDocs(a: VaultDoc, b: VaultDoc): VaultDoc {
   const tombstones: Record<string, string> = { ...a.tombstones };
