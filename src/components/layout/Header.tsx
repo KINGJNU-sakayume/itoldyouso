@@ -1,146 +1,112 @@
-import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Music, LayoutDashboard, LogOut, Menu, X, Sparkles } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '../../store/authStore';
+import { Link, NavLink } from 'react-router-dom';
+import { ListOrdered, Plus, RefreshCcw, Settings2, Award } from 'lucide-react';
+import { useLang } from '../../lib/i18n';
+import { useVault } from '../../store/vaultStore';
+import { useSync } from '../../store/authStore';
+import { isStale } from '../../lib/metrics';
 
-export default function Header() {
-  const { profile, spotifyUser, logout } = useAuthStore();
-  const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const { t, i18n } = useTranslation();
+function useDueCount() {
+  return useVault(s => s.claims.filter(c => isStale(c, s.settings.staleDays)).length);
+}
 
-  const isActive = (path: string) => location.pathname === path;
+function SyncState() {
+  const { t } = useLang();
+  const status = useSync(s => s.status);
+  if (status === 'off' || status === 'signed-out' || status === 'loading') return null;
+  const tone = status === 'error' ? 'bg-accent' : status === 'syncing' ? 'bg-ink-3 animate-pulse' : 'bg-ink-2';
+  return (
+    <Link to="/settings#sync" className="flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink" title={t(`sync.${status}`)}>
+      <span className={`h-1.5 w-1.5 rounded-full ${tone}`} />
+      <span className={status === 'error' ? 'up' : 'hidden sm:inline'}>{t(`sync.${status}`)}</span>
+    </Link>
+  );
+}
 
-  const toggleLanguage = () => {
-    const next = i18n.language === 'en' ? 'ko' : 'en';
-    i18n.changeLanguage(next);
-    localStorage.setItem('language', next);
-  };
+function Count({ n }: { n: number }) {
+  if (!n) return null;
+  return <span className="num ml-1 rounded-sm bg-accent px-1 text-[11px] font-medium leading-4 text-paper">{n}</span>;
+}
 
-  const navLinks = profile
-    ? [
-        { href: '/', label: t('nav.discoveryWall'), icon: Music },
-        { href: '/vault', label: t('nav.vault'), icon: LayoutDashboard },
-        { href: '/badges', label: t('nav.badges'), icon: Sparkles },
-      ]
-    : [];
+export default function Header({ hideTabs }: { hideTabs?: boolean }) {
+  const { t } = useLang();
+  const due = useDueCount();
+
+  const links = [
+    { to: '/', label: t('nav.list'), icon: ListOrdered, end: true },
+    { to: '/checkin', label: t('nav.checkin'), icon: RefreshCcw, count: due },
+    { to: '/record', label: t('nav.record'), icon: Award },
+    { to: '/settings', label: t('nav.settings'), icon: Settings2 },
+  ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[var(--color-border)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-xl bg-[var(--color-text)] flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            <span className="serif text-lg font-semibold text-[var(--color-text)] hidden sm:block">
-              {t('nav.title')}
-            </span>
+    <>
+      <header className="border-b border-rule pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-8 px-4 sm:px-6">
+          <Link to="/" className="shrink-0 text-[17px] font-semibold tracking-tight">
+            I told you so<span className="text-accent">.</span>
           </Link>
-
-          {navLinks.length > 0 && (
-            <nav className="hidden md:flex items-center gap-1">
-              {navLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  to={href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive(href)
-                      ? 'bg-[var(--color-text)] text-white'
-                      : 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  <Icon size={15} />
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          )}
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleLanguage}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[var(--color-border)] hover:bg-[var(--color-surface-2)] transition-all duration-200 text-[var(--color-text-2)] hover:text-[var(--color-text)] select-none"
-              title={i18n.language === 'en' ? '한국어로 변경' : 'Switch to English'}
-            >
-              <span className={i18n.language === 'en' ? 'text-[var(--color-text)]' : 'text-[var(--color-text-3)]'}>EN</span>
-              <span className="text-[var(--color-text-3)]">/</span>
-              <span className={i18n.language === 'ko' ? 'text-[var(--color-text)]' : 'text-[var(--color-text-3)]'}>KO</span>
-            </button>
-
-            {profile && (
-              <>
-                <Link to="/profile" className="hidden md:flex items-center gap-2.5 group">
-                  <img
-                    src={spotifyUser?.images[0]?.url || `https://api.dicebear.com/7.x/initials/svg?seed=${profile.display_name}`}
-                    alt={profile.display_name}
-                    className="w-8 h-8 rounded-full object-cover ring-2 ring-[var(--color-border)] group-hover:ring-[var(--color-primary)] transition-all"
-                  />
-                  <span className="text-sm font-medium text-[var(--color-text-2)] group-hover:text-[var(--color-text)] transition-colors">
-                    {profile.display_name}
-                  </span>
-                </Link>
-                <button
-                  onClick={logout}
-                  className="hidden md:flex btn-ghost text-xs"
-                  title={t('nav.signOut')}
-                >
-                  <LogOut size={15} />
-                </button>
-              </>
-            )}
-
-            {navLinks.length > 0 && (
-              <button
-                className="md:hidden p-2 rounded-xl hover:bg-[var(--color-surface-2)] transition-colors"
-                onClick={() => setMenuOpen(!menuOpen)}
+          <nav className="hidden h-full items-stretch gap-6 md:flex">
+            {links.map(l => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                end={l.end}
+                className={({ isActive }) =>
+                  `-mb-px flex items-center border-b-2 text-sm transition-colors ${
+                    isActive ? 'border-ink font-medium text-ink' : 'border-transparent text-ink-2 hover:text-ink'
+                  }`
+                }
               >
-                {menuOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
-            )}
+                {l.label}
+                <Count n={l.count ?? 0} />
+              </NavLink>
+            ))}
+          </nav>
+          <div className="ml-auto flex items-center gap-4">
+            <SyncState />
+            <Link to="/new" className="btn btn-primary hidden md:inline-flex">
+              <Plus size={15} strokeWidth={2.25} />
+              {t('nav.new')}
+            </Link>
           </div>
         </div>
-      </div>
+      </header>
 
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-[var(--color-border)] bg-white"
-          >
-            <div className="px-4 py-3 space-y-1">
-              {navLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  to={href}
-                  onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                    isActive(href)
-                      ? 'bg-[var(--color-text)] text-white'
-                      : 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)]'
-                  }`}
-                >
-                  <Icon size={16} />
-                  {label}
-                </Link>
-              ))}
-              {profile && (
-                <button
-                  onClick={() => { logout(); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] transition-all"
-                >
-                  <LogOut size={16} />
-                  {t('nav.signOut')}
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </header>
+      {!hideTabs && (
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-rule bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+          <div className="grid h-[60px] grid-cols-5">
+            {links.slice(0, 2).map(l => (
+              <TabLink key={l.to} {...l} />
+            ))}
+            <Link to="/new" className="grid place-items-center" aria-label={t('nav.new')}>
+              <span className="grid h-10 w-10 place-items-center rounded bg-ink text-paper">
+                <Plus size={20} strokeWidth={2.25} />
+              </span>
+            </Link>
+            {links.slice(2).map(l => (
+              <TabLink key={l.to} {...l} />
+            ))}
+          </div>
+        </nav>
+      )}
+    </>
+  );
+}
+
+function TabLink({ to, label, icon: Icon, end, count }: { to: string; label: string; icon: typeof Plus; end?: boolean; count?: number }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `relative flex flex-col items-center justify-center gap-0.5 text-[11px] ${isActive ? 'font-medium text-ink' : 'text-ink-3'}`
+      }
+    >
+      <Icon size={19} strokeWidth={1.75} />
+      {label}
+      {!!count && (
+        <span className="num absolute right-[calc(50%-20px)] top-2 rounded-sm bg-accent px-1 text-[10px] leading-[14px] text-paper">{count}</span>
+      )}
+    </NavLink>
   );
 }

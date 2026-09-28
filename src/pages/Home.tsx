@@ -1,201 +1,174 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Filter, Sparkles, RefreshCw } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
-import { supabase } from '../lib/supabase';
+import { useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowRight, Search } from 'lucide-react';
 import type { Claim } from '../types';
-import { useAuthStore } from '../store/authStore';
-import ClaimCard from '../components/feed/ClaimCard';
-import NewClaimModal from '../components/feed/NewClaimModal';
-import ProofOfTasteCard from '../components/card-generator/ProofOfTasteCard';
-import { CLAIMS_PER_MONTH } from '../types';
+import { useVault } from '../store/vaultStore';
+import { useLang } from '../lib/i18n';
+import { headline, isStale, lastUpdateAt, picksThisMonth } from '../lib/metrics';
+import ClaimRow, { ClaimTableHead } from '../components/claims/ClaimRow';
 
-type FilterType = 'all' | 'validated' | 'pioneer' | 'trending';
+const STATUSES = ['all', 'watching', 'hit', 'dropped'] as const;
+const SORTS = ['recent', 'growth', 'stale'] as const;
+type SortKey = (typeof SORTS)[number];
+
+function pick<T extends string>(value: string | null, options: readonly T[], fallback: T): T {
+  return options.includes(value as T) ? (value as T) : fallback;
+}
+
+const sorters: Record<SortKey, (a: Claim, b: Claim) => number> = {
+  recent: (a, b) => b.claimedAt.localeCompare(a.claimedAt),
+  growth: (a, b) => (headline(b)?.mult ?? -1) - (headline(a)?.mult ?? -1),
+  stale: (a, b) => lastUpdateAt(a).localeCompare(lastUpdateAt(b)),
+};
+
+function FirstRun() {
+  const { t } = useLang();
+  return (
+    <div className="mx-auto max-w-xl py-6 md:py-14">
+      <p className="eyebrow">I told you so</p>
+      <h1 className="mt-3 text-[28px] font-semibold leading-tight md:text-4xl">{t('empty.title')}</h1>
+      <p className="mt-4 text-ink-2">{t('empty.lead')}</p>
+      <ol className="mt-8 border-t border-ink">
+        {[1, 2, 3].map(i => (
+          <li key={i} className="grid grid-cols-[2.25rem_1fr] gap-2 border-b border-rule py-4">
+            <span className="num pt-0.5 text-[13px] text-ink-3">0{i}</span>
+            <div>
+              <p className="font-medium">{t(`empty.step${i}`)}</p>
+              <p className="mt-0.5 text-sm text-ink-2">{t(`empty.step${i}Body`)}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-8 flex flex-wrap gap-2">
+        <Link to="/new" className="btn btn-primary">
+          {t('empty.cta')}
+        </Link>
+        <Link to="/settings#backup" className="btn btn-quiet">
+          {t('empty.restore')}
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
-  const { profile } = useAuthStore();
-  const { t } = useTranslation();
-  const [claims, setClaims] = useState<Claim[]>([]);
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [showNewClaim, setShowNewClaim] = useState(false);
-  const [shareTarget, setShareTarget] = useState<Claim | null>(null);
+  const { t } = useLang();
+  const claims = useVault(s => s.claims);
+  const settings = useVault(s => s.settings);
+  const [params, setParams] = useSearchParams();
 
-  const fetchClaims = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      let query = supabase
-        .from('claims')
-        .select('*, profile:profiles(*)')
-        .order('created_at', { ascending: false })
-        .limit(60);
+  const status = pick(params.get('s'), STATUSES, 'all');
+  const sort = pick(params.get('sort'), SORTS, 'recent');
+  const q = params.get('q') ?? '';
 
-      if (filter === 'validated') query = query.eq('is_validated', true);
-      if (filter === 'pioneer') query = query.eq('is_pioneer', true);
-      if (filter === 'trending') query = query.order('vibe_index', { ascending: false });
+  const setParam = (key: string, value: string, fallback: string) =>
+    setParams(
+      p => {
+        if (!value || value === fallback) p.delete(key);
+        else p.set(key, value);
+        return p;
+      },
+      { replace: true },
+    );
 
-      const { data } = await query;
-      if (!data) return;
+  const counts = useMemo(() => {
+    const c = { all: claims.length, watching: 0, hit: 0, dropped: 0 };
+    claims.forEach(x => c[x.status]++);
+    return c;
+  }, [claims]);
 
-      let enrichedClaims = data as Claim[];
+  const due = claims.filter(c => isStale(c, settings.staleDays)).length;
+  const used = picksThisMonth(claims);
 
-      if (profile) {
-        const { data: respects } = await supabase
-          .from('respects')
-          .select('claim_id')
-          .eq('user_id', profile.id);
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return claims
+      .filter(c => status === 'all' || c.status === status)
+      .filter(
+        c =>
+          !needle ||
+          c.artist.toLowerCase().includes(needle) ||
+          c.track.toLowerCase().includes(needle) ||
+          c.tags.some(tag => tag.toLowerCase().includes(needle)),
+      )
+      .sort(sorters[sort]);
+  }, [claims, status, sort, q]);
 
-        const respectedIds = new Set((respects || []).map(r => r.claim_id));
-        enrichedClaims = enrichedClaims.map(c => ({
-          ...c,
-          has_respected: respectedIds.has(c.id),
-        }));
-      }
-
-      setClaims(enrichedClaims);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filter, profile]);
-
-  useEffect(() => { fetchClaims(); }, [fetchClaims]);
-
-  const remainingClaims = profile ? CLAIMS_PER_MONTH - profile.claims_this_month : 0;
-
-  const FILTERS: { id: FilterType; label: string }[] = [
-    { id: 'all', label: t('home.filterAll') },
-    { id: 'validated', label: t('home.filterValidated') },
-    { id: 'pioneer', label: t('home.filterPioneers') },
-    { id: 'trending', label: t('home.filterRising') },
-  ];
+  if (!claims.length) return <FirstRun />;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-8">
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-[var(--color-text)]">{t('home.title')}</h1>
-          <p className="text-sm text-[var(--color-text-3)] mt-1">
-            {claims.length} {t('home.claimsTracked')}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchClaims}
-            className="p-2.5 rounded-xl hover:bg-[var(--color-surface-2)] transition-colors text-[var(--color-text-3)]"
-          >
-            <RefreshCw size={16} />
-          </button>
-          {profile && (
-            <button
-              onClick={() => setShowNewClaim(true)}
-              disabled={remainingClaims <= 0}
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              <Plus size={16} />
-              {t('home.newClaim')}
-              <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-xs">
-                {remainingClaims}/{CLAIMS_PER_MONTH}
-              </span>
-            </button>
-          )}
-        </div>
+    <div>
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="text-2xl font-semibold">{t('list.title')}</h1>
+        <p className="text-[13px] text-ink-2">
+          {t('list.thisMonth')}{' '}
+          <span className={`num font-medium ${settings.monthlyLimit && used >= settings.monthlyLimit ? 'up' : 'text-ink'}`}>
+            {used}
+            {settings.monthlyLimit ? ` / ${settings.monthlyLimit}` : ''}
+          </span>
+        </p>
       </div>
 
-      <div className="flex items-center gap-2 mb-8 overflow-x-auto scrollbar-none pb-1">
-        <Filter size={14} className="text-[var(--color-text-3)] shrink-0" />
-        {FILTERS.map(f => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-              filter === f.id
-                ? 'bg-[var(--color-text)] text-white'
-                : 'bg-[var(--color-surface-2)] text-[var(--color-text-2)] hover:bg-[var(--color-border)]'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <div className="masonry-grid">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="masonry-item">
-              <div className="rounded-2xl overflow-hidden">
-                <div className="shimmer aspect-square" />
-                <div className="p-4 bg-white space-y-2">
-                  <div className="shimmer h-3 w-3/4 rounded" />
-                  <div className="shimmer h-3 w-1/2 rounded" />
-                  <div className="shimmer h-10 rounded-xl" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : claims.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center py-24 text-center"
+      {due > 0 && (
+        <Link
+          to="/checkin"
+          className="group mt-5 flex items-center justify-between gap-3 border border-ink px-4 py-3 transition-colors hover:bg-ink hover:text-paper"
         >
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-            style={{ background: 'var(--color-primary-light)' }}
-          >
-            <Sparkles size={28} style={{ color: 'var(--color-primary)' }} />
-          </div>
-          <h3 className="text-xl font-bold text-[var(--color-text)] mb-2">
-            {filter === 'all' ? t('home.noClaimsYet') : t('home.noMatches')}
-          </h3>
-          <p className="text-sm text-[var(--color-text-2)] max-w-xs">
-            {filter === 'all' && profile
-              ? t('home.noClaimsDesc')
-              : t('home.noMatchesDesc')}
-          </p>
-          {filter === 'all' && profile && (
-            <button
-              onClick={() => setShowNewClaim(true)}
-              className="btn-primary mt-6"
-            >
-              <Plus size={16} />
-              {t('home.makeFirstClaim')}
-            </button>
-          )}
-        </motion.div>
-      ) : (
-        <div className="masonry-grid">
-          <AnimatePresence>
-            {claims.map(claim => (
-              <ClaimCard
-                key={claim.id}
-                claim={claim}
-                onUpdate={fetchClaims}
-                onShareCard={setShareTarget}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+          <span className="text-sm">
+            {t('list.dueBanner', { count: due, days: settings.staleDays })}
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-sm font-medium">
+            {t('nav.checkin')}
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
       )}
 
-      <AnimatePresence>
-        {showNewClaim && (
-          <NewClaimModal
-            onClose={() => setShowNewClaim(false)}
-            onSuccess={() => { fetchClaims(); setShowNewClaim(false); }}
-          />
-        )}
-      </AnimatePresence>
+      <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div role="tablist" className="seg border-b-0">
+          {STATUSES.map(s => (
+            <button key={s} role="tab" aria-selected={status === s} onClick={() => setParam('s', s, 'all')}>
+              {t(`list.filter.${s}`)} <span className="num text-[12px] text-ink-3">{counts[s]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 pb-2">
+          <label className="relative flex-1 md:w-56 md:flex-none">
+            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" />
+            <input
+              type="search"
+              value={q}
+              onChange={e => setParam('q', e.target.value, '')}
+              placeholder={t('list.search')}
+              aria-label={t('list.search')}
+              className="field h-9 pl-8"
+            />
+          </label>
+          <select
+            value={sort}
+            onChange={e => setParam('sort', e.target.value, 'recent')}
+            aria-label={t('list.sortLabel')}
+            className="field h-9 w-auto"
+          >
+            {SORTS.map(s => (
+              <option key={s} value={s}>
+                {t(`list.sort.${s}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-      <AnimatePresence>
-        {shareTarget && (
-          <ProofOfTasteCard
-            claim={shareTarget}
-            onClose={() => setShareTarget(null)}
-          />
-        )}
-      </AnimatePresence>
+      <ClaimTableHead />
+      {list.length ? (
+        <ul className="border-t border-ink md:border-t-0">
+          {list.map(c => (
+            <ClaimRow key={c.id} claim={c} staleDays={settings.staleDays} />
+          ))}
+        </ul>
+      ) : (
+        <p className="border-t border-ink py-16 text-center text-sm text-ink-3 md:border-t-0">{t('list.noMatch')}</p>
+      )}
     </div>
   );
 }

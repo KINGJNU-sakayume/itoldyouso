@@ -1,121 +1,87 @@
-export interface Profile {
+export type Lang = 'ko' | 'en';
+
+/** Numbers the user types in by hand. All optional; a pick tracks whichever ones were filled. */
+export const METRIC_KEYS = ['views', 'streams', 'listeners'] as const;
+export type MetricKey = (typeof METRIC_KEYS)[number];
+export type Metrics = Partial<Record<MetricKey, number>>;
+
+export interface Snapshot {
   id: string;
-  spotify_id: string;
-  display_name: string;
-  avatar_url: string;
-  spotify_url: string;
-  claims_this_month: number;
-  last_claim_reset: string;
-  created_at: string;
-  updated_at: string;
+  /** ISO datetime */
+  at: string;
+  values: Metrics;
+  memo?: string;
+}
+
+export type ClaimStatus = 'watching' | 'hit' | 'dropped';
+export type HitReason = 'growth' | 'target' | 'manual';
+
+export interface Target {
+  metric: MetricKey;
+  value: number;
 }
 
 export interface Claim {
   id: string;
-  user_id: string;
-  spotify_artist_id: string;
-  artist_name: string;
-  artist_image_url: string;
-  track_id: string;
-  track_name: string;
-  album_cover_url: string;
-  genres: string[];
-  entry_listeners: number;
-  entry_playcount: number;
-  current_listeners: number;
-  current_playcount: number;
-  vibe_index: number;
-  insight: string;
-  is_validated: boolean;
-  validated_at: string | null;
-  respect_count: number;
-  is_pioneer: boolean;
-  youtube_video_id: string | null;
-  youtube_video_title: string | null;
-  youtube_view_count: number | null;
-  youtube_like_count: number | null;
-  entry_youtube_view_count: number | null;
-  entry_youtube_like_count: number | null;
-  created_at: string;
-  updated_at: string;
-  profile?: Profile;
-  has_respected?: boolean;
+  artist: string;
+  track: string;
+  youtubeUrl?: string;
+  /** Any other link: Spotify, Melon, SoundCloud, Bandcamp… */
+  link?: string;
+  /** Overrides the YouTube thumbnail as cover art. */
+  imageUrl?: string;
+  tags: string[];
+  /** Why this song — written at pick time. */
+  note: string;
+  /** Metric the growth rate and the hit rule are measured on. */
+  primary: MetricKey;
+  target?: Target;
+  /** ISO datetime of the pick. snapshots[0] is taken at this moment. */
+  claimedAt: string;
+  /** Sorted by `at`, oldest first. snapshots[0] is the entry point. */
+  snapshots: Snapshot[];
+  status: ClaimStatus;
+  hitAt?: string;
+  hitReason?: HitReason;
+  /** Free text for a manual hit ("won a rookie award") or a drop. */
+  statusNote?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ArtistSnapshot {
-  id: string;
-  claim_id: string;
-  spotify_artist_id: string;
-  listeners: number;
-  playcount: number;
-  vibe_index: number;
-  snapshot_date: string;
+export interface Settings {
+  /** A pick counts as a hit once its primary metric reaches entry × this. */
+  hitMultiplier: number;
+  /** New picks allowed per calendar month. 0 = unlimited. */
+  monthlyLimit: number;
+  /** A watching pick is due for a check-in after this many days. */
+  staleDays: number;
 }
 
-export interface Badge {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  category: string;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+/** Everything that is stored, exported and synced. */
+export interface VaultDoc {
+  app: 'itoldyouso';
+  version: 2;
+  claims: Claim[];
+  /** Deleted claim id → deletion time, so deletes survive merges. */
+  tombstones: Record<string, string>;
+  settings: Settings;
+  settingsUpdatedAt: string;
+  /** Achievement ids the user has already been notified about. */
+  seen: string[];
 }
 
-export interface UserBadge {
-  id: string;
-  user_id: string;
-  badge_id: string;
-  claim_id: string | null;
-  earned_at: string;
-  badge?: Badge;
-  claim?: Claim;
+/** What the pick form produces. */
+export interface ClaimDraft {
+  artist: string;
+  track: string;
+  youtubeUrl?: string;
+  link?: string;
+  imageUrl?: string;
+  tags: string[];
+  note: string;
+  primary: MetricKey;
+  target?: Target;
+  claimedAt: string;
+  entry: Metrics;
 }
-
-export interface SpotifyUser {
-  id: string;
-  display_name: string;
-  email: string;
-  images: { url: string }[];
-  external_urls: { spotify: string };
-}
-
-export interface SpotifyArtist {
-  id: string;
-  name: string;
-  images: { url: string; width: number; height: number }[];
-  genres: string[];
-  external_urls: { spotify: string };
-}
-
-export interface SpotifyTrack {
-  id: string;
-  name: string;
-  artists: { id: string; name: string }[];
-  album: {
-    id: string;
-    name: string;
-    images: { url: string; width: number; height: number }[];
-  };
-  popularity: number;
-  preview_url: string | null;
-  external_urls: { spotify: string };
-}
-
-export interface SpotifySearchResult {
-  tracks: {
-    items: SpotifyTrack[];
-  };
-  artists: {
-    items: SpotifyArtist[];
-  };
-}
-
-export type BadgeRarity = 'common' | 'rare' | 'epic' | 'legendary';
-
-export const CLAIMS_PER_MONTH = 5;
-export const VALIDATION_THRESHOLD = 50;
-export const PIONEER_CHECK = true;
-
-export const MAX_YOUTUBE_VIEWS_FOR_CLAIM = 5_000_000;
-export const MAX_YOUTUBE_LIKES_FOR_CLAIM = 100_000;
-export const MAX_LASTFM_LISTENERS_FOR_CLAIM = 1_000_000;

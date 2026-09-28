@@ -1,29 +1,26 @@
 /** @type {import('tailwindcss').Config} */
+const v = name => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      fontFamily: {
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
       colors: {
-        brand: {
-          bg: '#FAF9F7',
-          surface: '#FFFFFF',
-          surface2: '#F4F3F0',
-          border: '#E8E6E0',
-          text: '#1A1814',
-          text2: '#6B6560',
-          text3: '#9B978F',
-          primary: '#C4956A',
-          primaryLight: '#F0DCC4',
-          accent: '#8BAE9F',
-          accentLight: '#D4EAE4',
-          gold: '#D4A853',
-          validated: '#5B9B6E',
-          validatedLight: '#D4EDDA',
-        },
+        paper: v('paper'),
+        sunk: v('sunk'),
+        ink: { DEFAULT: v('ink'), 2: v('ink-2'), 3: v('ink-3') },
+        rule: v('rule'),
+        accent: v('accent'),
+        down: v('down'),
+      },
+      fontFamily: {
+        sans: ['"IBM Plex Sans KR"', '"Apple SD Gothic Neo"', '"Malgun Gothic"', 'system-ui', 'sans-serif'],
+        // Hangul inside numeric/mono text falls back to the sans face, not a system mono.
+        mono: ['"IBM Plex Mono"', '"IBM Plex Sans KR"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      borderRadius: {
+        DEFAULT: '3px',
+        sm: '2px',
       },
     },
   },
