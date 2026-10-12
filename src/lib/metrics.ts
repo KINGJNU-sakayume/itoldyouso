@@ -6,12 +6,19 @@ export function sortSnapshots(snapshots: Snapshot[]): Snapshot[] {
   return [...snapshots].sort((a, b) => a.at.localeCompare(b.at));
 }
 
+/** A first measurement may be months after discovery. Never backdate it. */
+export function baselinePoint(c: Claim, m: MetricKey): { value: number; at: string } | undefined {
+  const s = c.snapshots.find(s => s.values[m] != null);
+  return s ? { value: s.values[m]!, at: s.at } : undefined;
+}
+
+/** Only values explicitly observed at the discovery timestamp. */
 export function entryValue(c: Claim, m: MetricKey): number | undefined {
-  for (const s of c.snapshots) {
-    const v = s.values[m];
-    if (v != null) return v;
-  }
-  return undefined;
+  return c.snapshots.find(s => Date.parse(s.at) === Date.parse(c.claimedAt) && s.values[m] != null)?.values[m];
+}
+
+export function observationCheckins(c: Claim): Snapshot[] {
+  return c.snapshots.filter((s, i) => i > 0 && Object.keys(s.values).length > 0);
 }
 
 export function latestPoint(c: Claim, m: MetricKey): { value: number; at: string } | undefined {
@@ -29,13 +36,15 @@ export function trackedMetrics(c: Claim): MetricKey[] {
 
 /** The metric growth is measured on: the chosen primary, or the first one that has data. */
 export function baseMetric(c: Claim): MetricKey | undefined {
-  if (entryValue(c, c.primary) != null) return c.primary;
+  if (baselinePoint(c, c.primary)?.value != null) return c.primary;
   return trackedMetrics(c)[0];
 }
 
 export interface Growth {
   metric: MetricKey;
   entry: number;
+  baselineAt: string;
+  atDiscovery: boolean;
   latest: number;
   latestAt: string;
   /** latest / entry. null until a second data point exists (or entry is 0). */
@@ -43,16 +52,19 @@ export interface Growth {
 }
 
 export function growthOf(c: Claim, m: MetricKey): Growth | undefined {
-  const entry = entryValue(c, m);
+  const first = baselinePoint(c, m);
+  const entry = first?.value;
   const last = latestPoint(c, m);
   if (entry == null || !last) return undefined;
   const points = c.snapshots.reduce((n, s) => n + (s.values[m] != null ? 1 : 0), 0);
   return {
     metric: m,
     entry,
+    baselineAt: first!.at,
+    atDiscovery: Date.parse(first!.at) === Date.parse(c.claimedAt),
     latest: last.value,
     latestAt: last.at,
-    mult: entry > 0 && points > 1 ? last.value / entry : null,
+    mult: entry > 0 && points > 1 && Date.parse(last.at) > Date.parse(first!.at) ? last.value / entry : null,
   };
 }
 
@@ -64,10 +76,11 @@ export function headline(c: Claim): Growth | undefined {
 /** Highest multiplier the primary metric ever reached (not just the latest). */
 export function peakMult(c: Claim): number | null {
   const m = baseMetric(c);
-  const entry = m ? entryValue(c, m) : undefined;
+  const first = m ? baselinePoint(c, m) : undefined;
+  const entry = first?.value;
   if (!m || !entry) return null;
   let best: number | null = null;
-  for (const s of c.snapshots.slice(1)) {
+  for (const s of c.snapshots.filter(s => s.at > first!.at)) {
     const v = s.values[m];
     if (v != null) best = Math.max(best ?? 0, v / entry);
   }
@@ -82,16 +95,18 @@ export function isStale(c: Claim, staleDays: number, now: number = Date.now()): 
   return c.status === 'watching' && now - new Date(lastUpdateAt(c)).getTime() >= staleDays * DAY;
 }
 
-/** First check-in that satisfies the hit rule, if any. The entry snapshot never counts. */
+/** First post-discovery observation meeting a target or a later growth comparison. */
 export function findHit(c: Claim, settings: Settings): { at: string; reason: HitReason } | null {
   const m = baseMetric(c);
-  const entry = m ? entryValue(c, m) : undefined;
-  for (const s of c.snapshots.slice(1)) {
+  const first = m ? baselinePoint(c, m) : undefined;
+  const entry = first?.value;
+  for (const s of c.snapshots) {
+    if (Date.parse(s.at) <= Date.parse(c.claimedAt)) continue;
     if (c.target) {
       const v = s.values[c.target.metric];
       if (v != null && v >= c.target.value) return { at: s.at, reason: 'target' };
     }
-    if (m && entry) {
+    if (m && entry && s.at > first!.at) {
       const v = s.values[m];
       if (v != null && v / entry >= settings.hitMultiplier) return { at: s.at, reason: 'growth' };
     }
@@ -126,7 +141,7 @@ export function picksThisMonth(claims: Claim[], now: Date = new Date()): number 
 }
 
 export function checkinCount(claims: Claim[]): number {
-  return claims.reduce((n, c) => n + Math.max(0, c.snapshots.length - 1), 0);
+  return claims.reduce((n, c) => n + observationCheckins(c).length, 0);
 }
 
 export interface Stats {

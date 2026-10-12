@@ -1,16 +1,16 @@
 import { METRIC_KEYS } from '../types';
 import type { Claim, ClaimStatus, HitReason, MetricKey, Metrics, Settings, Snapshot, VaultDoc } from '../types';
 import { fmtDateTime } from './format';
-import { entryValue, latestPoint, headline, sortSnapshots } from './metrics';
+import { baselinePoint, entryValue, latestPoint, headline, sortSnapshots, observationCheckins } from './metrics';
 import { uid } from './id';
 
-export const DEFAULT_SETTINGS: Settings = { hitMultiplier: 2, monthlyLimit: 5, staleDays: 14 };
+export const DEFAULT_SETTINGS: Settings = { hitMultiplier: 2, monthlyLimit: 0, staleDays: 30 };
 export const EPOCH = new Date(0).toISOString();
 
 export function emptyDoc(): VaultDoc {
   return {
     app: 'itoldyouso',
-    version: 2,
+    version: 3,
     claims: [],
     tombstones: {},
     settings: { ...DEFAULT_SETTINGS },
@@ -36,16 +36,26 @@ function metrics(v: unknown): Metrics {
   if (!isObj(v)) return out;
   for (const k of METRIC_KEYS) {
     const n = v[k];
-    if (typeof n === 'number' && Number.isFinite(n) && n >= 0) out[k] = Math.round(n);
+    if (typeof n === 'number' && Number.isFinite(n) && n >= 0) out[k] = n;
   }
   return out;
+}
+
+function metricSources(v: unknown): Claim['metricSources'] {
+  if (!isObj(v)) return undefined;
+  const sources: NonNullable<Claim['metricSources']> = {};
+  for (const m of METRIC_KEYS) {
+    const source = str(v[m]);
+    if (source) sources[m] = source;
+  }
+  return sources;
 }
 
 function snapshot(v: unknown): Snapshot | null {
   if (!isObj(v)) return null;
   const at = isoOr(v.at);
   const values = metrics(v.values);
-  if (!at || !Object.keys(values).length) return null;
+  if (!at) return null;
   return { id: str(v.id) ?? uid(), at, values, ...(str(v.memo) ? { memo: str(v.memo) } : {}) };
 }
 
@@ -60,7 +70,7 @@ export function normalizeClaim(v: unknown): Claim | null {
   const snapshots = sortSnapshots(
     (Array.isArray(v.snapshots) ? v.snapshots : []).map(snapshot).filter((s): s is Snapshot => !!s),
   );
-  if (!snapshots.length) return null;
+
 
   const status: ClaimStatus = ['watching', 'hit', 'dropped'].includes(v.status as string)
     ? (v.status as ClaimStatus)
@@ -69,8 +79,8 @@ export function normalizeClaim(v: unknown): Claim | null {
     ? (v.hitReason as HitReason)
     : undefined;
   const target =
-    isObj(v.target) && isMetric(v.target.metric) && typeof v.target.value === 'number' && v.target.value > 0
-      ? { metric: v.target.metric, value: Math.round(v.target.value) }
+    isObj(v.target) && isMetric(v.target.metric) && typeof v.target.value === 'number' && Number.isFinite(v.target.value) && v.target.value > 0
+      ? { metric: v.target.metric, value: v.target.value }
       : undefined;
   const tags = Array.isArray(v.tags)
     ? [...new Set(v.tags.map(str).filter((t): t is string => !!t))]
@@ -84,17 +94,19 @@ export function normalizeClaim(v: unknown): Claim | null {
     link: str(v.link),
     imageUrl: str(v.imageUrl),
     tags,
-    note: typeof v.note === 'string' ? v.note.trim() : '',
+    discoveryContext: str(v.discoveryContext),
+    metricSources: metricSources(v.metricSources),
+    note: typeof v.note === 'string' ? v.note : '',
     primary: isMetric(v.primary) ? v.primary : 'views',
     target,
     claimedAt,
     snapshots,
     status,
-    hitAt: status === 'hit' ? isoOr(v.hitAt, snapshots[snapshots.length - 1].at) : undefined,
+    hitAt: status === 'hit' ? isoOr(v.hitAt) : undefined,
     hitReason: status === 'hit' ? (hitReason ?? 'manual') : undefined,
     statusNote: str(v.statusNote),
-    createdAt: isoOr(v.createdAt, claimedAt)!,
-    updatedAt: isoOr(v.updatedAt, claimedAt)!,
+    createdAt: isoOr(v.createdAt),
+    updatedAt: isoOr(v.updatedAt, EPOCH)!,
   };
   // Drop undefined keys so documents compare and serialize cleanly.
   return JSON.parse(JSON.stringify(claim));
@@ -111,7 +123,7 @@ export function normalizeSettings(v: unknown): Settings {
 
 /** Returns null when the input is not an I Told You So document at all. */
 export function normalizeDoc(raw: unknown): VaultDoc | null {
-  if (!isObj(raw) || raw.app !== 'itoldyouso' || !Array.isArray(raw.claims)) return null;
+  if (!isObj(raw) || raw.app !== 'itoldyouso' || !Array.isArray(raw.claims) || (raw.version != null && raw.version !== 2 && raw.version !== 3)) return null;
   const claims = new Map<string, Claim>();
   for (const c of raw.claims.map(normalizeClaim)) {
     if (c && (!claims.has(c.id) || claims.get(c.id)!.updatedAt < c.updatedAt)) claims.set(c.id, c);
@@ -125,7 +137,7 @@ export function normalizeDoc(raw: unknown): VaultDoc | null {
   }
   return {
     app: 'itoldyouso',
-    version: 2,
+    version: 3,
     claims: [...claims.values()],
     tombstones,
     settings: normalizeSettings(raw.settings),
@@ -165,7 +177,7 @@ export function mergeDocs(a: VaultDoc, b: VaultDoc): VaultDoc {
 
   return {
     app: 'itoldyouso',
-    version: 2,
+    version: 3,
     claims: [...claims.values()],
     tombstones,
     settings: settingsFromB ? b.settings : a.settings,
@@ -202,8 +214,8 @@ function csvCell(v: string | number | undefined): string {
 export function toCsv(claims: Claim[]): string {
   const header = [
     'claimed_at', 'artist', 'track', 'status', 'hit_at', 'primary_metric', 'growth_pct',
-    ...METRIC_KEYS.flatMap(m => [`entry_${m}`, `latest_${m}`]),
-    'checkins', 'tags', 'note', 'youtube_url', 'link',
+    ...METRIC_KEYS.flatMap(m => [`entry_${m}`, `baseline_${m}`, `baseline_${m}_at`, `latest_${m}`, `latest_${m}_at`, `source_${m}`]),
+    'checkins', 'tags', 'note', 'youtube_url', 'link', 'created_at', 'discovery_context', 'hit_reason',
   ];
   const rows = [...claims]
     .sort((a, b) => a.claimedAt.localeCompare(b.claimedAt))
@@ -212,8 +224,8 @@ export function toCsv(claims: Claim[]): string {
       return [
         fmtDateTime(c.claimedAt), c.artist, c.track, c.status, c.hitAt ? fmtDateTime(c.hitAt) : '',
         h?.metric, h?.mult != null ? Math.round((h.mult - 1) * 1000) / 10 : '',
-        ...METRIC_KEYS.flatMap(m => [entryValue(c, m), latestPoint(c, m)?.value]),
-        c.snapshots.length - 1, c.tags.join(' '), c.note, c.youtubeUrl, c.link,
+        ...METRIC_KEYS.flatMap(m => [entryValue(c, m), baselinePoint(c, m)?.value, baselinePoint(c, m)?.at, latestPoint(c, m)?.value, latestPoint(c, m)?.at, c.metricSources?.[m]]),
+        observationCheckins(c).length, c.tags.join(' '), c.note, c.youtubeUrl, c.link, c.createdAt, c.discoveryContext, c.hitReason,
       ].map(csvCell).join(',');
     });
   // BOM so Excel opens Korean text correctly.

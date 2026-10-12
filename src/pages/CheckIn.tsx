@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
+import { METRIC_KEYS } from '../types';
 import type { Claim, MetricKey, Metrics } from '../types';
 import { useVault } from '../store/vaultStore';
 import { toast } from '../store/toastStore';
 import { useLang } from '../lib/i18n';
 import { fmtAgo, fmtMult, parseAmount } from '../lib/format';
-import { headline, isStale, lastUpdateAt, latestPoint, trackedMetrics } from '../lib/metrics';
+import { headline, isStale, lastUpdateAt, latestPoint } from '../lib/metrics';
 import { parseYouTubeId, youtubeWatchUrl } from '../lib/youtube';
 import Cover from '../components/ui/Cover';
 import AmountInput from '../components/ui/AmountInput';
@@ -61,6 +62,7 @@ export default function CheckIn() {
       const updated = useVault.getState().claims.find(x => x.id === c.id);
       toast({
         kind: 'hit',
+        mark: t(`outcome.${updated?.hitReason ?? 'growth'}`),
         title: t('toast.hit', { track: c.track }),
         body: updated?.hitReason === 'target' ? t('toast.hitTarget') : t('toast.hitGrowth', { mult: fmtMult(settings.hitMultiplier) }),
       });
@@ -158,7 +160,7 @@ function Row({
   onReopen: () => void;
 }) {
   const { t, lang } = useLang();
-  const tracked = trackedMetrics(claim);
+  const tracked = METRIC_KEYS;
   const videoId = parseYouTubeId(claim.youtubeUrl);
   const { filled, invalid } = parseRow(values);
   const h = headline(claim);
@@ -193,7 +195,7 @@ function Row({
         <div className="mt-3 flex items-center gap-3 pl-14 text-sm">
           <span className="text-ink-2">{t('checkin.saved')}</span>
           {h?.mult != null && <Delta mult={h.mult} className="font-medium" />}
-          {claim.status === 'hit' && <Stamp animate />}
+          {claim.status === 'hit' && <Stamp animate label={t(`outcome.${claim.hitReason ?? 'manual'}`)} />}
           <button onClick={onReopen} className="ml-auto text-[13px] text-ink-3 hover:text-ink">
             {t('checkin.again')}
           </button>
@@ -212,6 +214,7 @@ function Row({
               <div key={m} className="w-[calc(50%-0.375rem)] sm:w-44">
                 <label htmlFor={`${claim.id}-${m}`} className="mb-1 block text-[12px] text-ink-3">
                   {t(`metric.${m}`)}
+                  {claim.metricSources?.[m] && <span className="block">{claim.metricSources[m]}</span>}
                 </label>
                 <AmountInput
                   id={`${claim.id}-${m}`}

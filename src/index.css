@@ -83,7 +83,7 @@
   }
 
   .eyebrow {
-    @apply font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3;
+    @apply font-mono text-[12px] uppercase tracking-[0.14em] text-ink-3;
   }
   /* Wide tracking pulls Hangul syllables apart. */
   html:lang(ko) .eyebrow {
@@ -213,4 +213,8 @@
   .toast-in {
     animation: none;
   }
+}
+
+@media (max-width: 767px) {
+  .text-\[10px\], .text-\[11px\], .text-\[12px\] { font-size: 13px; }
 }

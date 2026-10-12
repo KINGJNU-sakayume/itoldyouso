@@ -19,7 +19,7 @@ import {
   parseAmount,
   toLocalDateInput,
 } from '../lib/format';
-import { baseMetric, entryValue, growthOf, headline, isStale, latestPoint, trackedMetrics } from '../lib/metrics';
+import { baseMetric, baselinePoint, observationCheckins, entryValue, growthOf, headline, isStale, latestPoint, trackedMetrics } from '../lib/metrics';
 import { parseYouTubeId, youtubeWatchUrl } from '../lib/youtube';
 import Cover from '../components/ui/Cover';
 import Delta from '../components/ui/Delta';
@@ -110,6 +110,7 @@ function Detail({ claim }: { claim: Claim }) {
             </p>
           )}
 
+          <p className="mt-2 text-[13px] text-ink-3">{claim.createdAt ? t('detail.createdOn', { date: fmtDateTime(claim.createdAt) }) : t('detail.createdUnknown')}</p>
           <StatusLine claim={claim} animate={justHit} />
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -139,6 +140,23 @@ function Detail({ claim }: { claim: Claim }) {
       </header>
 
       <section className="mt-12">
+        <SectionHead title={t('detail.why')} />
+        {claim.discoveryContext && <p className="mt-4 text-sm text-ink-2">{claim.discoveryContext}</p>}
+        {claim.note ? (
+          <blockquote className="mt-5 whitespace-pre-wrap border-l-2 border-accent pl-4 text-[15px] leading-relaxed">
+            {claim.note}
+          </blockquote>
+        ) : (
+          <p className="mt-5 text-sm text-ink-3">
+            {t('detail.noNote')}{' '}
+            <Link to={`/p/${claim.id}/edit`} className="underline underline-offset-2 hover:text-ink">
+              {t('common.edit')}
+            </Link>
+          </p>
+        )}
+      </section>
+
+      <section className="mt-12">
         <SectionHead title={t('detail.numbers')} />
         <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_230px] md:gap-8">
           <div className="overflow-x-auto">
@@ -158,11 +176,15 @@ function Detail({ claim }: { claim: Claim }) {
                     <tr key={m} className="border-t border-rule">
                       <td className="py-3">
                         {t(`metric.${m}`)}
+                        <span className="block text-[13px] text-ink-3">{claim.metricSources?.[m] ?? t('detail.unknownSource')}</span>
                         {m === base && (
                           <span className="ml-2 rounded-sm border border-rule px-1 py-px text-[11px] text-ink-3">{t('form.base')}</span>
                         )}
                       </td>
-                      <td className="num py-3 text-right text-ink-2">{fmtFull(g.entry, lang)}</td>
+                      <td className="num py-3 text-right text-ink-2">
+                        {entryValue(claim, m) != null ? fmtFull(entryValue(claim, m), lang) : '—'}
+                        {!g.atDiscovery && <span className="block font-sans text-[13px] text-ink-3">{t('detail.firstObserved', { date: fmtDate(g.baselineAt), value: fmtFull(g.entry, lang) })}</span>}
+                      </td>
                       <td className="num py-3 text-right">
                         {fmtFull(g.latest, lang)}
                         <span className="block text-[11px] text-ink-3">{fmtShortDate(g.latestAt)}</span>
@@ -181,7 +203,7 @@ function Detail({ claim }: { claim: Claim }) {
             <p className="eyebrow">{h ? `${t('detail.growth')} · ${t(`metric.${h.metric}`)}` : t('detail.growth')}</p>
             {h?.mult != null ? (
               <>
-                <p className="mt-2 text-5xl font-semibold leading-none">
+                <p className="mt-2 text-3xl font-semibold leading-none">
                   <Delta mult={h.mult} as="mult" />
                 </p>
                 <p className="mt-2 text-sm">
@@ -190,11 +212,12 @@ function Detail({ claim }: { claim: Claim }) {
               </>
             ) : (
               <>
-                <p className="num mt-2 text-5xl font-semibold leading-none text-ink-3">—</p>
+                <p className="num mt-2 text-3xl font-semibold leading-none text-ink-3">—</p>
                 <p className="mt-2 text-[13px] text-ink-3">{t('detail.noGrowthYet')}</p>
               </>
             )}
             <p className="mt-4 text-[12px] leading-snug text-ink-3">
+              {h && <span className="mb-2 block">{t('detail.baselineOn', { date: fmtDate(h.baselineAt) })}</span>}
               {t('detail.hitRule', { mult: fmtMult(settings.hitMultiplier) })}{' '}
               <Link to="/settings" className="underline underline-offset-2 hover:text-ink">
                 {t('nav.settings')}
@@ -202,6 +225,7 @@ function Detail({ claim }: { claim: Claim }) {
             </p>
           </div>
         </div>
+        {!tracked.length && <p className="py-4 text-sm text-ink-2">{t('detail.noMetrics')}</p>}
         {claim.target && <TargetProgress claim={claim} />}
       </section>
 
@@ -231,25 +255,10 @@ function Detail({ claim }: { claim: Claim }) {
         </section>
       )}
 
-      <section className="mt-12">
-        <SectionHead title={t('detail.why')} />
-        {claim.note ? (
-          <blockquote className="mt-5 whitespace-pre-wrap border-l-2 border-accent pl-4 text-[15px] leading-relaxed">
-            {claim.note}
-          </blockquote>
-        ) : (
-          <p className="mt-5 text-sm text-ink-3">
-            {t('detail.noNote')}{' '}
-            <Link to={`/p/${claim.id}/edit`} className="underline underline-offset-2 hover:text-ink">
-              {t('common.edit')}
-            </Link>
-          </p>
-        )}
-      </section>
 
       <section id="log" className="mt-12 scroll-mt-6">
         <SectionHead title={t('detail.log')}>
-          <span className="num text-[12px] text-ink-3">{t('detail.checkinCount', { count: claim.snapshots.length - 1 })}</span>
+          <span className="num text-[12px] text-ink-3">{t('detail.checkinCount', { count: observationCheckins(claim).length })}</span>
         </SectionHead>
         {claim.status !== 'dropped' && <CheckinForm claim={claim} inputRef={firstInput} onHit={() => setJustHit(true)} />}
         <SnapshotTable claim={claim} />
@@ -276,7 +285,7 @@ function StatusLine({ claim, animate }: { claim: Claim; animate: boolean }) {
           : t('detail.hitManual');
     return (
       <div className="mt-5 flex items-center gap-5">
-        <Stamp size="md" animate={animate} />
+        <Stamp size="md" animate={animate} label={t(`outcome.${claim.hitReason ?? 'manual'}`)} />
         <p className="text-sm text-ink-2">
           {t('detail.hitOn', { date: fmtDate(claim.hitAt), days })} · {reason}
           {claim.statusNote && <span className="block text-ink-3">“{claim.statusNote}”</span>}
@@ -292,7 +301,7 @@ function StatusLine({ claim, animate }: { claim: Claim; animate: boolean }) {
       </p>
     );
   }
-  const last = claim.snapshots[claim.snapshots.length - 1].at;
+  const last = claim.snapshots.at(-1)?.at ?? claim.claimedAt;
   const stale = isStale(claim, settings.staleDays);
   return (
     <p className="mt-5 text-sm text-ink-2">
@@ -308,8 +317,8 @@ function TargetProgress({ claim }: { claim: Claim }) {
   const { t, lang } = useLang();
   const target = claim.target!;
   const current = latestPoint(claim, target.metric)?.value;
-  const start = entryValue(claim, target.metric) ?? 0;
-  const ratio = current == null ? 0 : Math.max(0, Math.min(1, (current - start) / (target.value - start || 1)));
+  const start = baselinePoint(claim, target.metric)?.value;
+  const ratio = current == null || start == null ? 0 : Math.max(0, Math.min(1, (current - start) / (target.value - start || 1)));
   const reached = current != null && current >= target.value;
   return (
     <div className="mt-6 border border-rule px-4 py-3">
@@ -319,7 +328,7 @@ function TargetProgress({ claim }: { claim: Claim }) {
           {t(`metric.${target.metric}`)} <span className="num">{fmtFull(target.value, lang)}</span>
         </span>
         <span className={`num ${reached ? 'up font-medium' : 'text-ink-2'}`}>
-          {reached ? t('detail.targetReached') : `${Math.round(ratio * 100)}%`}
+          {reached ? t('detail.targetReached') : start == null ? '—' : `${Math.round(ratio * 100)}%`}
         </span>
       </div>
       <div className="mt-2.5 h-[3px] bg-rule">
@@ -343,7 +352,7 @@ function CheckinForm({
   const settings = useVault(s => s.settings);
   const tracked = trackedMetrics(claim);
   const [showAll, setShowAll] = useState(false);
-  const metrics = showAll ? METRIC_KEYS : tracked;
+  const metrics = showAll || !tracked.length ? METRIC_KEYS : tracked;
   const today = toLocalDateInput(new Date().toISOString());
   const [date, setDate] = useState(today);
   const [values, setValues] = useState<Record<MetricKey, string>>({ views: '', streams: '', listeners: '' });
@@ -372,6 +381,7 @@ function CheckinForm({
       const updated = useVault.getState().claims.find(c => c.id === claim.id);
       toast({
         kind: 'hit',
+        mark: t(`outcome.${updated?.hitReason ?? 'growth'}`),
         title: t('toast.hit', { track: claim.track }),
         body: updated?.hitReason === 'target' ? t('toast.hitTarget') : t('toast.hitGrowth', { mult: fmtMult(settings.hitMultiplier) }),
       });
@@ -387,6 +397,7 @@ function CheckinForm({
             <div key={m}>
               <label htmlFor={`ci-${m}`} className="label">
                 {t(`metric.${m}`)}
+                {claim.metricSources?.[m] && <span className="block text-[13px] text-ink-3">{claim.metricSources[m]}</span>}
               </label>
               <AmountInput
                 ref={i === 0 ? inputRef : undefined}
@@ -475,7 +486,7 @@ function SnapshotTable({ claim }: { claim: Claim }) {
         </thead>
         <tbody>
           {rows.map(s => {
-            const isEntry = s.id === claim.snapshots[0].id;
+            const isEntry = Date.parse(s.at) === Date.parse(claim.claimedAt);
             return (
               <tr key={s.id} className="border-t border-rule">
                 <td className="num py-2.5 text-[13px]">
@@ -564,6 +575,7 @@ function Manage({ claim, onDelete }: { claim: Claim; onDelete: () => void }) {
               </button>
             </>
           )}
+          {claim.status === 'hit' && claim.hitReason !== 'manual' && <button className="btn btn-line btn-sm" onClick={() => setPending('hit')}>{t('detail.markHit')}</button>}
           {claim.status === 'hit' &&
             (claim.hitReason === 'manual' ? (
               <button className="btn btn-quiet btn-sm" onClick={() => apply('watching')}>
