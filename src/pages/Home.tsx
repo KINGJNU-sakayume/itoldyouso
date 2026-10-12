@@ -1,14 +1,15 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Search } from 'lucide-react';
-import type { Claim } from '../types';
+import { METRIC_KEYS } from '../types';
+import type { MetricKey, Claim } from '../types';
 import { useVault } from '../store/vaultStore';
 import { useLang } from '../lib/i18n';
-import { headline, isStale, lastUpdateAt, picksThisMonth } from '../lib/metrics';
+import { entryValue, headline, isStale, lastUpdateAt, picksThisMonth } from '../lib/metrics';
 import ClaimRow, { ClaimTableHead } from '../components/claims/ClaimRow';
 
 const STATUSES = ['all', 'watching', 'hit', 'dropped'] as const;
-const SORTS = ['recent', 'growth', 'stale'] as const;
+const SORTS = ['recent', 'growth', 'stale', 'early'] as const;
 type SortKey = (typeof SORTS)[number];
 
 function pick<T extends string>(value: string | null, options: readonly T[], fallback: T): T {
@@ -16,6 +17,7 @@ function pick<T extends string>(value: string | null, options: readonly T[], fal
 }
 
 const sorters: Record<SortKey, (a: Claim, b: Claim) => number> = {
+  early: () => 0,
   recent: (a, b) => b.claimedAt.localeCompare(a.claimedAt),
   growth: (a, b) => (headline(b)?.mult ?? -1) - (headline(a)?.mult ?? -1),
   stale: (a, b) => lastUpdateAt(a).localeCompare(lastUpdateAt(b)),
@@ -60,6 +62,9 @@ export default function Home() {
   const status = pick(params.get('s'), STATUSES, 'all');
   const sort = pick(params.get('sort'), SORTS, 'recent');
   const q = params.get('q') ?? '';
+  const metric = pick(params.get('metric'), METRIC_KEYS, 'views') as MetricKey;
+  const sources = [...new Set(claims.map(c => c.metricSources?.[metric] ?? ''))].sort();
+  const source = sources.includes(params.get('source') ?? '') ? params.get('source') ?? '' : sources[0] ?? '';
 
   const setParam = (key: string, value: string, fallback: string) =>
     setParams(
@@ -91,8 +96,9 @@ export default function Home() {
           c.track.toLowerCase().includes(needle) ||
           c.tags.some(tag => tag.toLowerCase().includes(needle)),
       )
-      .sort(sorters[sort]);
-  }, [claims, status, sort, q]);
+      .filter(c => sort !== 'early' || (c.metricSources?.[metric] ?? '') === source)
+      .sort(sort === 'early' ? (a, b) => (entryValue(a, metric) ?? Infinity) - (entryValue(b, metric) ?? Infinity) || b.claimedAt.localeCompare(a.claimedAt) : sorters[sort]);
+  }, [claims, status, sort, q, metric, source]);
 
   if (!claims.length) return <FirstRun />;
 
@@ -159,6 +165,17 @@ export default function Home() {
         </div>
       </div>
 
+      {sort === 'early' && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <select className="field w-auto" aria-label={t('list.earlyMetric')} value={metric} onChange={e => { setParam('metric', e.target.value, 'views'); setParam('source', '', ''); }}>
+            {METRIC_KEYS.map(m => <option key={m} value={m}>{t(`metric.${m}`)}</option>)}
+          </select>
+          <select className="field max-w-full w-auto" aria-label={t('form.metricSource')} value={source} onChange={e => setParam('source', e.target.value, '')}>
+            {sources.map(s => <option key={s} value={s}>{s || t('detail.unknownSource')}</option>)}
+          </select>
+          <p className="text-[13px] text-ink-3">{t('list.earlyHint')}</p>
+        </div>
+      )}
       <ClaimTableHead />
       {list.length ? (
         <ul className="border-t border-ink md:border-t-0">

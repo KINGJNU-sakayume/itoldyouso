@@ -1,6 +1,6 @@
 import type { Claim, MetricKey } from '../types';
 import { DAY } from './format';
-import { baseMetric, entryValue } from './metrics';
+import { baseMetric, baselinePoint, entryValue, observationCheckins } from './metrics';
 
 export type AchievementGroup = 'discovery' | 'growth' | 'accuracy' | 'habit' | 'collection';
 export type Tier = 1 | 2 | 3 | 4;
@@ -94,10 +94,11 @@ function reaches(k: number, days?: number) {
     let best = 0;
     for (const c of ctx.claims) {
       const m = baseMetric(c);
-      const entry = m ? entryValue(c, m) : undefined;
+      const first = m ? baselinePoint(c, m) : undefined;
+      const entry = first?.value;
       if (!m || !entry) continue;
-      const start = time(c.claimedAt);
-      for (const s of c.snapshots.slice(1)) {
+      const start = time(first!.at);
+      for (const s of c.snapshots.filter(s => s.at > first!.at)) {
         const v = s.values[m];
         if (v == null) continue;
         if (days != null && time(s.at) - start > days * DAY) continue;
@@ -171,7 +172,7 @@ function consecutiveMonths(n: number) {
 }
 
 function checkins(n: number) {
-  return (ctx: Ctx): Check => nth(ctx.claims.flatMap(c => c.snapshots.slice(1)), n, s => s.at);
+  return (ctx: Ctx): Check => nth(ctx.claims.flatMap(observationCheckins), n, s => s.at);
 }
 
 const hotStreak = (ctx: Ctx): Check => {
@@ -226,7 +227,7 @@ const bullseye = (ctx: Ctx): Check => {
   for (const c of ctx.claims) {
     if (!c.target) continue;
     const { metric, value } = c.target;
-    const s = c.snapshots.slice(1).find(s => (s.values[metric] ?? 0) >= value);
+    const s = c.snapshots.find(s => Date.parse(s.at) > Date.parse(c.claimedAt) && s.values[metric] != null && s.values[metric]! >= value);
     if (s) cands.push({ at: s.at, claimId: c.id });
   }
   return earliest(cands);

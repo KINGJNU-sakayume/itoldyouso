@@ -61,7 +61,7 @@ export default function ClaimChart({ claim, metric, hitMultiplier }: Props) {
   // offer a log scale once the range spans an order of magnitude.
   const positives = points.map(p => p.v).filter(v => v > 0);
   const spread = positives.length ? top / Math.min(...positives) : 1;
-  const canLog = spread >= 10;
+  const canLog = spread >= 10 && positives.length === points.length;
   const log = canLog && (logPref ?? spread >= 30);
 
   const logLo = log ? 10 ** Math.floor(Math.log10(Math.min(...positives))) : 0;
@@ -202,7 +202,7 @@ export default function ClaimChart({ claim, metric, hitMultiplier }: Props) {
         >
           <p className="num text-ink-3">
             {fmtDate(hovered.at)}
-            {active === 0 && ` · ${t('detail.entryPoint')}`}
+            {active === 0 && ` · ${t(Date.parse(hovered.at) === Date.parse(claim.claimedAt) ? 'detail.entryPoint' : 'detail.baseline')}`}
           </p>
           <p className="num font-medium">
             {fmtFull(hovered.v, lang)}

@@ -2,7 +2,7 @@ import type { Claim } from '../types';
 import { coverUrl } from './youtube';
 
 /**
- * Draws the proof card straight onto a canvas. Fixed light palette so the
+ * Draws the personal archive card straight onto a canvas. Fixed light palette so the
  * image looks the same whatever theme the app is in.
  */
 export type CardFormat = 'story' | 'square';
@@ -199,7 +199,7 @@ export async function renderShareCard(
     const label = (t: string, yy: number) => {
       ctx.font = `400 26px ${MONO}`;
       ctx.fillStyle = C.ink3;
-      text(t.toUpperCase(), M, yy);
+      text(wrap(ctx, t.toUpperCase(), inner, 1)[0] ?? '', M, yy);
     };
     const value = (t: string, yy: number) => {
       ctx.font = `500 42px ${MONO}`;
@@ -219,7 +219,7 @@ export async function renderShareCard(
     value(wrap(ctx, content.numbersValue, inner, 1)[0] ?? '', y);
 
     // The number
-    const bigSize = story ? 232 : 184;
+    const bigSize = story ? 152 : 120;
     y += story ? 60 : 44;
     const bigY = y + bigSize * 0.82;
     if (content.big) {
@@ -244,7 +244,15 @@ export async function renderShareCard(
       ctx.font = `600 ${story ? 64 : 56}px ${SANS}`;
       ctx.fillStyle = C.ink2;
       y += 64;
-      text(content.pending, M, y);
+      const lines = wrap(ctx, content.pending, inner, 2);
+      lines.forEach((line, i) => text(line, M, y + i * 70));
+      y += Math.max(0, lines.length - 1) * 70;
+      if (content.hitLabel && !dry) {
+        const size = 48;
+        ctx.font = `700 ${size}px ${SANS}`;
+        const w = ctx.measureText(content.hitLabel.toUpperCase()).width + size * 0.9;
+        drawStamp(ctx, W - M - w / 2, y - 22, content.hitLabel, content.hitDate, size);
+      }
     }
 
     if (story && content.note) {

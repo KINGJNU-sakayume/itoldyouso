@@ -32,7 +32,7 @@ function cleanMetrics(values: Metrics): Metrics {
   const out: Metrics = {};
   for (const k of METRIC_KEYS) {
     const v = values[k];
-    if (v != null && Number.isFinite(v) && v >= 0) out[k] = Math.round(v);
+    if (v != null && Number.isFinite(v) && v >= 0) out[k] = v;
   }
   return out;
 }
@@ -45,7 +45,12 @@ function draftFields(d: ClaimDraft) {
     link: d.link?.trim() || undefined,
     imageUrl: d.imageUrl?.trim() || undefined,
     tags: [...new Set(d.tags.map(t => t.trim()).filter(Boolean))],
-    note: d.note.trim(),
+    note: d.note,
+    discoveryContext: d.discoveryContext?.trim() || undefined,
+    metricSources: d.metricSources ? Object.fromEntries(METRIC_KEYS.flatMap(m => {
+      const source = d.metricSources?.[m]?.trim();
+      return source ? [[m, source]] : [];
+    })) : undefined,
     primary: d.primary,
     target: d.target,
     claimedAt: d.claimedAt,
@@ -78,7 +83,7 @@ export const useVault = create<VaultState>()(
           const claim: Claim = {
             id: uid(),
             ...draftFields(draft),
-            snapshots: [{ id: uid(), at: draft.claimedAt, values: cleanMetrics(draft.entry) }],
+            snapshots: [{ id: uid(), at: draft.entryAt ?? draft.claimedAt, values: cleanMetrics(draft.entry) }],
             status: 'watching',
             createdAt: t,
             updatedAt: t,
@@ -90,11 +95,14 @@ export const useVault = create<VaultState>()(
         updateClaim: (id, draft) =>
           patchClaim(id, c => {
             const [entry, ...rest] = c.snapshots;
-            const snapshots = sortSnapshots([
-              { ...entry, at: draft.claimedAt, values: cleanMetrics(draft.entry) },
+            const snapshots = sortSnapshots(!entry && !Object.keys(draft.entry).length ? [] : [
+              { ...entry, id: entry?.id ?? uid(), at: draft.entryAt ?? entry?.at ?? draft.claimedAt, values: cleanMetrics(draft.entry) },
               ...rest,
             ]);
-            return reconcileStatus({ ...c, ...draftFields(draft), snapshots, updatedAt: now() }, get().settings);
+            return reconcileStatus({ ...c, ...draftFields(draft), metricSources: Object.fromEntries(METRIC_KEYS.flatMap(m => {
+              const source = c.metricSources?.[m] ?? draft.metricSources?.[m]?.trim();
+              return source ? [[m, source]] : [];
+            })), snapshots, updatedAt: now() }, get().settings);
           }),
 
         removeClaim: id => {
@@ -137,7 +145,7 @@ export const useVault = create<VaultState>()(
 
         removeSnapshot: (id, snapshotId) =>
           patchClaim(id, c => {
-            if (c.snapshots[0]?.id === snapshotId) return c;
+            if (c.snapshots[0]?.id === snapshotId && c.snapshots[0].at === c.claimedAt) return c;
             return reconcileStatus(
               { ...c, snapshots: c.snapshots.filter(s => s.id !== snapshotId), updatedAt: now() },
               get().settings,
@@ -167,7 +175,7 @@ export const useVault = create<VaultState>()(
 
         markSeen: ids => set(s => ({ seen: [...new Set([...s.seen, ...ids])] })),
 
-        getDoc: () => ({ app: 'itoldyouso', version: 2, ...dataOf(get()) }),
+        getDoc: () => ({ app: 'itoldyouso', version: 3, ...dataOf(get()) }),
 
         importDoc: (doc, mode) => {
           const current = get().getDoc();
@@ -201,7 +209,11 @@ export const useVault = create<VaultState>()(
     },
     {
       name: 'itys-vault',
-      version: 2,
+      version: 3,
+      migrate: persisted => {
+        const doc = normalizeDoc({ app: 'itoldyouso', ...(persisted as object) });
+        return dataOf(doc ?? emptyDoc());
+      },
       storage: createJSONStorage(() => localStorage),
       partialize: s => dataOf(s),
       // Whatever is in storage is validated before it becomes state.

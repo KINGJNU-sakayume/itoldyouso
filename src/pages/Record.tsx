@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useVault } from '../store/vaultStore';
 import { useLang } from '../lib/i18n';
-import { computeStats, peakMult } from '../lib/metrics';
+import { computeStats, entryValue, headline, peakMult } from '../lib/metrics';
 import { evaluateAchievements, ACHIEVEMENT_COUNT } from '../lib/achievements';
-import { fmtMult } from '../lib/format';
+import { fmtDate, fmtCompact, fmtMult } from '../lib/format';
 import AchievementGrid from '../components/record/AchievementGrid';
 
 function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
@@ -73,24 +73,44 @@ function MonthStrip() {
 }
 
 export default function Record() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const claims = useVault(s => s.claims);
   const stats = useMemo(() => computeStats(claims), [claims]);
   const achievements = useMemo(() => evaluateAchievements(claims), [claims]);
   const earned = achievements.filter(a => a.earnedAt).length;
-  const top = useMemo(
-    () =>
-      claims
-        .map(c => ({ c, mult: peakMult(c) }))
-        .filter((x): x is { c: typeof x.c; mult: number } => x.mult != null)
-        .sort((a, b) => b.mult - a.mult)
-        .slice(0, 5),
-    [claims],
-  );
+  const notable = useMemo(() => {
+    const groups = new Map<string, typeof claims>();
+    for (const c of [...claims].sort((a, b) => b.claimedAt.localeCompare(a.claimedAt))) {
+      const h = headline(c);
+      if (!h || (peakMult(c) ?? 0) < 2 || (entryValue(c, h.metric) ?? Infinity) >= 10_000) continue;
+      const key = `${h.metric}\n${c.metricSources?.[h.metric] ?? ''}`;
+      groups.set(key, [...(groups.get(key) ?? []), c]);
+    }
+    return [...groups.entries()];
+  }, [claims]);
 
   return (
     <div>
       <h1 className="text-2xl font-semibold">{t('record.title')}</h1>
+
+      <section className="mt-8">
+        <h2 className="mb-3 font-semibold">{t('record.notable')}</h2>
+        {notable.length ? notable.map(([key, songs]) => {
+          const [metric, source] = key.split('\n');
+          return <div key={key} className="mt-5">
+            <h3 className="border-b border-ink pb-2 text-sm text-ink-2">{t(`metric.${metric}`)} · {source || t('detail.unknownSource')}</h3>
+            <ul>{songs.slice(0, 5).map(c => {
+              const h = headline(c)!;
+              return <li key={c.id} className="border-b border-rule py-4">
+                <Link to={`/p/${c.id}`} className="font-medium hover:underline">{c.track} <span className="font-normal text-ink-2">— {c.artist}</span></Link>
+                <p className="mt-1 text-[13px] text-ink-3">{fmtDate(c.claimedAt)} · {fmtCompact(h.entry, lang)} → {fmtCompact(h.latest, lang)} · {fmtMult(peakMult(c)!)}</p>
+                {c.note && <p className="mt-2 line-clamp-2 text-sm text-ink-2">{c.note}</p>}
+              </li>;
+            })}</ul>
+          </div>;
+        }) : <p className="border-t border-ink py-4 text-sm text-ink-3">{t('record.notableEmpty')}</p>}
+        <p className="mt-3 text-[13px] text-ink-3">{t('record.notableHint')}</p>
+      </section>
 
       <dl className="mt-6 grid grid-cols-2 border-t border-ink md:grid-cols-4">
         <Stat label={t('record.picks')} value={stats.total} sub={t('record.picksSub', { watching: stats.watching, dropped: stats.dropped })} />
@@ -122,44 +142,22 @@ export default function Record() {
         />
       </dl>
 
-      <div className="mt-12 grid gap-12 md:grid-cols-2">
+      <div className="mt-12 max-w-xl">
         <section>
           <h2 className="mb-4 font-semibold">{t('record.months')}</h2>
           <MonthStrip />
         </section>
-        <section>
-          <h2 className="mb-4 font-semibold">{t('record.top')}</h2>
-          {top.length ? (
-            <ol className="border-t border-ink">
-              {top.map(({ c, mult }, i) => (
-                <li key={c.id} className="border-b border-rule">
-                  <Link to={`/p/${c.id}`} className="flex items-center gap-3 py-2.5 hover:bg-sunk/70">
-                    <span className="num w-5 text-[12px] text-ink-3">{i + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      <span className="font-medium">{c.track}</span>
-                      <span className="text-ink-3"> — {c.artist}</span>
-                    </span>
-                    <span className={`num text-sm font-medium ${mult >= 1 ? 'up' : 'down'}`}>{fmtMult(mult)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="border-t border-ink py-6 text-sm text-ink-3">{t('record.topEmpty')}</p>
-          )}
-          <p className="mt-2 text-[12px] text-ink-3">{t('record.topNote', { checkins: stats.checkins })}</p>
-        </section>
       </div>
 
-      <section className="mt-16">
-        <div className="mb-6 flex items-baseline justify-between">
+      <details className="mt-12 border-t border-rule pt-5">
+        <summary className="mb-6 flex cursor-pointer items-baseline justify-between">
           <h2 className="text-xl font-semibold">{t('record.achievements')}</h2>
           <span className="num text-sm text-ink-2">
             {earned} / {ACHIEVEMENT_COUNT}
           </span>
-        </div>
+        </summary>
         <AchievementGrid results={achievements} claims={claims} />
-      </section>
+      </details>
     </div>
   );
 }

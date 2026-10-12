@@ -19,10 +19,10 @@ describe('normalizeDoc', () => {
       claims: [good, { id: 'x' }, { ...good, id: 'no-snaps', snapshots: [] }, 'junk'],
       settings: { hitMultiplier: 0, monthlyLimit: -3, staleDays: 'soon' },
     })!;
-    expect(out.claims).toHaveLength(1);
+    expect(out.claims).toHaveLength(2);
     expect(out.claims[0].tags).toEqual(['a', 'b']);
-    expect(out.claims[0].snapshots.map(s => s.values.views)).toEqual([2, 5]);
-    expect(out.settings).toEqual({ hitMultiplier: 1.1, monthlyLimit: 0, staleDays: 14 });
+    expect(out.claims[0].snapshots.map(s => s.values.views)).toEqual([1.6, 5]);
+    expect(out.settings).toEqual({ hitMultiplier: 1.1, monthlyLimit: 0, staleDays: 30 });
   });
 });
 

@@ -24,14 +24,14 @@ export default function ShareDialog({ claim, onClose }: { claim: Claim; onClose:
   const content = useMemo<CardContent>(() => {
     const h = headline(claim);
     const mult = h?.mult ?? null;
-    const metric = h ? t(`metric.${h.metric}`) : '';
+    const metric = h ? `${t(`metric.${h.metric}`)}${claim.metricSources?.[h.metric] ? ` · ${claim.metricSources[h.metric]}` : ''}` : '';
     return {
       brand: 'I TOLD YOU SO',
       number: `№ ${String(number).padStart(3, '0')}`,
       pickedLabel: t('share.picked'),
       pickedValue: fmtDate(claim.claimedAt),
       dPlus: dPlus(claim.claimedAt),
-      numbersLabel: h ? `${metric} · ${t(mult != null ? 'share.thenNow' : 'share.atPick')}` : '',
+      numbersLabel: h ? `${h.atDiscovery ? t('share.atPick') : t('detail.baselineOn', { date: fmtDate(h.baselineAt) })} · ${metric}` : t('detail.noMetrics'),
       numbersValue: h ? (mult != null ? `${fmtFull(h.entry, lang)} → ${fmtFull(h.latest, lang)}` : fmtFull(h.entry, lang)) : '',
       big: mult != null ? fmtMult(mult) : undefined,
       bigSub: mult != null ? fmtPct(mult) : undefined,
@@ -45,7 +45,7 @@ export default function ShareDialog({ claim, onClose }: { claim: Claim; onClose:
                 value: fmtCompact(claim.target.value, lang),
               })
             : t('share.watching'),
-      hitLabel: claim.status === 'hit' ? t('stamp.hit') : undefined,
+      hitLabel: claim.status === 'hit' ? t(`outcome.${claim.hitReason ?? 'manual'}`) : undefined,
       hitDate: claim.status === 'hit' && claim.hitAt ? fmtDate(claim.hitAt) : undefined,
       note: claim.note || undefined,
       footerLeft: 'itoldyouso',

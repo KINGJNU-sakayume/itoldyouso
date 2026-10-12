@@ -4,6 +4,8 @@ export type Lang = 'ko' | 'en';
 export const METRIC_KEYS = ['views', 'streams', 'listeners'] as const;
 export type MetricKey = (typeof METRIC_KEYS)[number];
 export type Metrics = Partial<Record<MetricKey, number>>;
+/** One fixed platform/video/release definition per metric history. */
+export type MetricSources = Partial<Record<MetricKey, string>>;
 
 export interface Snapshot {
   id: string;
@@ -33,19 +35,22 @@ export interface Claim {
   tags: string[];
   /** Why this song — written at pick time. */
   note: string;
+  discoveryContext?: string;
+  metricSources?: MetricSources;
   /** Metric the growth rate and the hit rule are measured on. */
   primary: MetricKey;
   target?: Target;
-  /** ISO datetime of the pick. snapshots[0] is taken at this moment. */
+  /** ISO datetime of discovery, independent of creation and observations. */
   claimedAt: string;
-  /** Sorted by `at`, oldest first. snapshots[0] is the entry point. */
+  /** Sorted observations; an empty initial snapshot is a recording marker, not zero. */
   snapshots: Snapshot[];
   status: ClaimStatus;
   hitAt?: string;
   hitReason?: HitReason;
   /** Free text for a manual hit ("won a rookie award") or a drop. */
   statusNote?: string;
-  createdAt: string;
+  /** Absent when a historical import did not record creation time. */
+  createdAt?: string;
   updatedAt: string;
 }
 
@@ -61,7 +66,7 @@ export interface Settings {
 /** Everything that is stored and exported. */
 export interface VaultDoc {
   app: 'itoldyouso';
-  version: 2;
+  version: 3;
   claims: Claim[];
   /** Deleted claim id → deletion time, so deletes survive merges. */
   tombstones: Record<string, string>;
@@ -80,8 +85,12 @@ export interface ClaimDraft {
   imageUrl?: string;
   tags: string[];
   note: string;
+  discoveryContext?: string;
+  metricSources?: MetricSources;
   primary: MetricKey;
   target?: Target;
   claimedAt: string;
   entry: Metrics;
+  /** Explicit observation time; omitted by legacy callers. */
+  entryAt?: string;
 }
