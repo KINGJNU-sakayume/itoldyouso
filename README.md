@@ -149,6 +149,7 @@ npm ci
 npm run dev        # http://localhost:5173
 npm run check      # lint + typecheck + test (CI와 같은 검사)
 npm run build      # dist/
+npm run preview    # 빌드 결과(dist/)를 로컬에서 확인
 ```
 
 Node 20 이상(CI는 22).
